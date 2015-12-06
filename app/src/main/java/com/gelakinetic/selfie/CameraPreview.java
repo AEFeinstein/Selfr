@@ -2,7 +2,6 @@ package com.gelakinetic.selfie;
 
 import android.content.Context;
 import android.hardware.Camera;
-import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
@@ -90,19 +89,19 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             }
         }
 
-        float ratio;
-        if (mPreviewSize.height >= mPreviewSize.width) {
-            ratio = (float) mPreviewSize.height / (float) mPreviewSize.width;
-        } else {
-            ratio = (float) mPreviewSize.width / (float) mPreviewSize.height;
-        }
+        if(mPreviewSize != null) {
+            float ratio;
+            if (mPreviewSize.height >= mPreviewSize.width) {
+                ratio = (float) mPreviewSize.height / (float) mPreviewSize.width;
+            } else {
+                ratio = (float) mPreviewSize.width / (float) mPreviewSize.height;
+            }
 
-        setMeasuredDimension(width, (int) (width * ratio));
+            setMeasuredDimension(width, (int) (width * ratio));
+        }
     }
 
     private Camera.Size getOptimalPreviewSize(List<Camera.Size> sizes, int w, int h) {
-
-        Log.v("search", w + ", " + h);
 
         double targetRatio = Math.max(h, w) / Math.min(h, w);
 
@@ -123,8 +122,6 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
                 }
             }
         }
-
-        Log.v("find", optimalSize.width + ", " + optimalSize.height);
 
         return optimalSize;
     }

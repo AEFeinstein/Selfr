@@ -10,8 +10,8 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
-import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.OrientationEventListener;
 import android.view.View;
@@ -34,17 +34,6 @@ import java.util.Locale;
  */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
-    /**
-     * Whether or not the system UI should be auto-hidden after
-     * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
-     */
-    private static final boolean AUTO_HIDE = true;
-
-    /**
-     * If {@link #AUTO_HIDE} is set, the number of milliseconds to wait after
-     * user interaction before hiding the system UI.
-     */
-    private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
 
     /**
      * Some older devices needs a small delay between UI widget updates
@@ -76,10 +65,6 @@ public class CameraActivity extends AppCompatActivity {
         @Override
         public void run() {
             // Delayed display of UI elements
-            ActionBar actionBar = getSupportActionBar();
-            if (actionBar != null) {
-                actionBar.show();
-            }
             mControlsView.setVisibility(View.VISIBLE);
         }
     };
@@ -120,6 +105,9 @@ public class CameraActivity extends AppCompatActivity {
                 toggle();
             }
         });
+
+        Toolbar mToolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(mToolbar);
     }
 
     short findMax(short[] array) {
@@ -182,16 +170,13 @@ public class CameraActivity extends AppCompatActivity {
 
                 /* Clamp rotation to nearest 90 degree wedge */
                 int rotation = 0;
-                if(315 <= orientation || orientation < 45) {
+                if (315 <= orientation || orientation < 45) {
                     rotation = 270;
-                }
-                else if(45 <= orientation && orientation < 135) {
+                } else if (45 <= orientation && orientation < 135) {
                     rotation = 180;
-                }
-                else if(135 <= orientation && orientation < 225) {
+                } else if (135 <= orientation && orientation < 225) {
                     rotation = 90;
-                }
-                else if(225 <= orientation && orientation < 315) {
+                } else if (225 <= orientation && orientation < 315) {
                     rotation = 0;
                 }
 
@@ -251,10 +236,6 @@ public class CameraActivity extends AppCompatActivity {
 
     private void hide() {
         // Hide UI first
-        ActionBar actionBar = getSupportActionBar();
-        if (actionBar != null) {
-            actionBar.hide();
-        }
         mControlsView.setVisibility(View.GONE);
         mVisible = false;
 
