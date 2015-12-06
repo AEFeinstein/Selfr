@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -32,7 +33,7 @@ import java.util.Locale;
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
  * status bar and navigation/system bar) with user interaction.
- *
+ * <p/>
  * TODO document
  * TODO force audio through speaker, not headphone, remove toast
  */
@@ -89,6 +90,7 @@ public class CameraActivity extends AppCompatActivity {
     private CameraPreview mCameraPreview;
     private int mDeviceRotation = 0;
     private OrientationEventListener mOrientationEventListener;
+    private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -155,7 +157,7 @@ public class CameraActivity extends AppCompatActivity {
         });
 
         /* Set up the camera */
-        mCamera = getCameraInstance(Camera.CameraInfo.CAMERA_FACING_FRONT);
+        mCamera = getCameraInstance(mCameraType);
         mCameraPreview = new CameraPreview(this, mCamera);
         mContentView.addView(mCameraPreview);
 
@@ -334,9 +336,15 @@ public class CameraActivity extends AppCompatActivity {
             }
 
             try {
+                /* Save the image */
                 FileOutputStream fos = new FileOutputStream(pictureFile);
                 fos.write(data);
                 fos.close();
+
+                /* Notify the media scanner so it displays in teh gallery */
+                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
+
+                /* A little feedback */
                 Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
                 /* Eat it */
@@ -400,6 +408,36 @@ public class CameraActivity extends AppCompatActivity {
                         android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI);
                 startActivity(i);
                 return true;
+            case R.id.camera_switch: {
+                /* Switch from one camera type to the other, adjust the icon as necessary */
+                switch (mCameraType) {
+                    case Camera.CameraInfo.CAMERA_FACING_FRONT: {
+                        mCameraType = Camera.CameraInfo.CAMERA_FACING_BACK;
+                        item.setIcon(R.drawable.ic_camera_front_white_24dp);
+                        break;
+                    }
+                    case Camera.CameraInfo.CAMERA_FACING_BACK: {
+                        mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
+                        item.setIcon(R.drawable.ic_camera_rear_white_24dp);
+                        break;
+                    }
+                }
+
+                /* Remove old camera & preview */
+                mContentView.removeView(mCameraPreview);
+                mCamera.stopPreview();
+                mCamera.release();
+
+                /* Make a new camera & preview */
+                mCamera = getCameraInstance(mCameraType);
+                mCameraPreview = new CameraPreview(this, mCamera);
+                mContentView.addView(mCameraPreview);
+
+                return true;
+            }
+            case R.id.flash_setting: {
+                return true;
+            }
             default:
                 return super.onOptionsItemSelected(item);
         }

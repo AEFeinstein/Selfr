@@ -5,4 +5,12 @@
         android:icon="@drawable/ic_photo_library_white_24dp"
         android:title="@string/photo_library"
         app:showAsAction="ifRoom"/>
+    <item android:id="@+id/flash_setting"
+        android:icon="@drawable/ic_flash_auto_white_24dp"
+        android:title="@string/flash_setting"
+        app:showAsAction="ifRoom"/>
+    <item android:id="@+id/camera_switch"
+        android:icon="@drawable/ic_camera_rear_white_24dp"
+        android:title="@string/camera_switch"
+        app:showAsAction="ifRoom"/>
 </menu>
