@@ -2,10 +2,12 @@ package com.gelakinetic.selfie;
 
 import android.content.Context;
 import android.hardware.Camera;
+import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * A basic Camera preview class
@@ -16,6 +18,9 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     private Camera mCamera;
     private boolean isPreviewRunning = false;
 
+    private List<Camera.Size> mSupportedPreviewSizes;
+    private Camera.Size mPreviewSize;
+
     public CameraPreview(Context context) {
         super(context);
     }
@@ -23,6 +28,8 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     public CameraPreview(Context context, Camera camera) {
         super(context);
         mCamera = camera;
+
+        mSupportedPreviewSizes = mCamera.getParameters().getSupportedPreviewSizes();
 
         // Install a SurfaceHolder.Callback so we get notified when the
         // underlying surface is created and destroyed.
@@ -66,5 +73,59 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         } catch (Exception e) {
             /* Eat it */
         }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        final int width = resolveSize(getSuggestedMinimumWidth(), widthMeasureSpec);
+        final int height = resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec);
+
+        if (mSupportedPreviewSizes != null) {
+            mPreviewSize = getOptimalPreviewSize(mSupportedPreviewSizes, width, height);
+
+            if (mPreviewSize != null) {
+                Camera.Parameters parameters = mCamera.getParameters();
+                parameters.setPreviewSize(mPreviewSize.width, mPreviewSize.height);
+                mCamera.setParameters(parameters);
+            }
+        }
+
+        float ratio;
+        if (mPreviewSize.height >= mPreviewSize.width) {
+            ratio = (float) mPreviewSize.height / (float) mPreviewSize.width;
+        } else {
+            ratio = (float) mPreviewSize.width / (float) mPreviewSize.height;
+        }
+
+        setMeasuredDimension(width, (int) (width * ratio));
+    }
+
+    private Camera.Size getOptimalPreviewSize(List<Camera.Size> sizes, int w, int h) {
+
+        Log.v("search", w + ", " + h);
+
+        double targetRatio = Math.max(h, w) / Math.min(h, w);
+
+        if (sizes == null)
+            return null;
+
+        Camera.Size optimalSize = null;
+        double minRatioDiff = Double.MAX_VALUE;
+        double minSizeDiff = Double.MAX_VALUE;
+
+        for (Camera.Size size : sizes) {
+            double ratio = Math.max(size.height, size.width) / Math.min(size.height, size.width);
+            if (Math.abs(ratio - targetRatio) <= minRatioDiff) {
+                if(Math.abs(Math.max(size.height, size.width) - Math.max(h, w)) < minSizeDiff) {
+                    optimalSize = size;
+                    minRatioDiff = Math.abs(ratio - targetRatio);
+                    minSizeDiff = Math.abs(Math.max(size.height, size.width) - Math.max(h, w));
+                }
+            }
+        }
+
+        Log.v("find", optimalSize.width + ", " + optimalSize.height);
+
+        return optimalSize;
     }
 }
