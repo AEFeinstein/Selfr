@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -24,6 +25,7 @@ import android.view.MenuItem;
 import android.view.OrientationEventListener;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -31,6 +33,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -41,7 +44,6 @@ import java.util.Locale;
  * <p/>
  * TODO document
  * TODO force audio through speaker, not headphone, remove toast
- * TODO disable view without stick
  * TODO check orientation for rear selfies
  */
 @SuppressWarnings("deprecation")
@@ -101,6 +103,7 @@ public class CameraActivity extends AppCompatActivity {
     private String mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
     private boolean mHardwareFlashSupported = false;
     private FrameLayout mFlashView;
+    private TextView mNoStickWarningView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,6 +115,7 @@ public class CameraActivity extends AppCompatActivity {
         mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = (FrameLayout) findViewById(R.id.fullscreen_content);
         mFlashView = (FrameLayout) findViewById(R.id.flash_view);
+        mNoStickWarningView = (TextView) findViewById(R.id.no_stick_text);
 
         mHandler = new Handler();
 
@@ -127,32 +131,35 @@ public class CameraActivity extends AppCompatActivity {
         setSupportActionBar(mToolbar);
     }
 
-    short findMax(short[] array) {
-        short max = Short.MIN_VALUE;
-        for (short element : array) {
-            if (element > max) {
-                max = element;
-            }
-        }
-        return max;
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
 
-        /* If we do not have the required permissions */
+        /* Check to see what permissions we're granted */
+        ArrayList<String> requestedPermissions = new ArrayList<>(3);
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                        != PackageManager.PERMISSION_GRANTED) {
+                != PackageManager.PERMISSION_GRANTED) {
+            requestedPermissions.add(Manifest.permission.CAMERA);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestedPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestedPermissions.add(Manifest.permission.RECORD_AUDIO);
+        }
+
+        /* If we don't have all of the permissions */
+        if (requestedPermissions.size() > 0) {
+            String permissionStrings[] = new String[requestedPermissions.size()];
+            requestedPermissions.toArray(permissionStrings);
             /* Request the permissions */
             ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO},
+                    permissionStrings,
                     PERMISSION_REQUEST_CODE);
         } else {
+            /* Otherwise, fire everything up */
             initializeHardware();
         }
     }
@@ -193,6 +200,16 @@ public class CameraActivity extends AppCompatActivity {
                         }
                     }, 3000);
                 }
+            }
+
+            short findMax(short[] array) {
+                short max = Short.MIN_VALUE;
+                for (short element : array) {
+                    if (element > max) {
+                        max = element;
+                    }
+                }
+                return max;
             }
         });
 
@@ -242,13 +259,13 @@ public class CameraActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         boolean allPermissionsGranted = true;
-        if(requestCode == PERMISSION_REQUEST_CODE) {
-            for( int i = 0; i < grantResults.length; i++) {
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            for (int i = 0; i < grantResults.length; i++) {
                 switch (permissions[i]) {
                     case Manifest.permission.CAMERA:
                     case Manifest.permission.WRITE_EXTERNAL_STORAGE:
                     case Manifest.permission.RECORD_AUDIO: {
-                        if(grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                        if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
                             allPermissionsGranted = false;
                         }
                         break;
@@ -259,7 +276,7 @@ public class CameraActivity extends AppCompatActivity {
                 }
             }
         }
-        if(!allPermissionsGranted) {
+        if (!allPermissionsGranted) {
             Toast.makeText(this, getString(R.string.permission_failure), Toast.LENGTH_LONG).show();
             this.finish();
         }
@@ -269,28 +286,31 @@ public class CameraActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
 
-        /* Clean up the camera */
-        mContentView.removeView(mCameraPreview);
-        if(mCamera != null) {
+        /* Clean up the camera & preview */
+        if (mCameraPreview != null) {
+            mContentView.removeView(mCameraPreview);
+            mCameraPreview = null;
+        }
+        if (mCamera != null) {
             mCamera.stopPreview();
             mCamera.release();
             mCamera = null;
         }
 
         /* Clean up the audio */
-        if(mAudioCapturer != null) {
+        if (mAudioCapturer != null) {
             mAudioCapturer.stop();
             mAudioCapturer = null;
         }
 
         /* Clean up the receiver */
-        if(mHeadsetStateReceiver != null) {
+        if (mHeadsetStateReceiver != null) {
             unregisterReceiver(mHeadsetStateReceiver);
             mHeadsetStateReceiver = null;
         }
 
         /* Clean up the accelerometer */
-        if(mOrientationEventListener != null) {
+        if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
             mOrientationEventListener = null;
         }
@@ -345,29 +365,31 @@ public class CameraActivity extends AppCompatActivity {
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
     }
 
-private class HeadsetStateReceiver extends BroadcastReceiver {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        int state = intent.getExtras().getInt("state");
-        int microphone = intent.getExtras().getInt("microphone");
-        if (state == 1 && microphone == 1) {
-            mAudioCapturer.start();
-        } else {
-            mAudioCapturer.stop();
-            try {
-                mFileWriter.close();
-            } catch (IOException | NullPointerException e) {
+    private class HeadsetStateReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int state = intent.getExtras().getInt("state");
+            int microphone = intent.getExtras().getInt("microphone");
+            if (state == 1 && microphone == 1) {
+                mNoStickWarningView.setVisibility(View.GONE);
+                mAudioCapturer.start();
+            } else {
+                mNoStickWarningView.setVisibility(View.VISIBLE);
+                mAudioCapturer.stop();
+                try {
+                    mFileWriter.close();
+                } catch (IOException | NullPointerException e) {
                     /* eat it */
+                }
+                mFileWriter = null;
             }
-            mFileWriter = null;
         }
     }
-
-}
 
     /**
      * A safe way to get an instance of the Camera object.
      */
+    @Nullable
     public static Camera getCameraInstance(int cameraType) {
         Camera c = null;
         try {
@@ -408,55 +430,53 @@ private class HeadsetStateReceiver extends BroadcastReceiver {
         return c; // returns null if camera is unavailable
     }
 
-private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
+    private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
 
-    @Override
-    public void onPictureTaken(byte[] data, Camera camera) {
+        @Override
+        public void onPictureTaken(byte[] data, Camera camera) {
 
-        if (!mHardwareFlashSupported &&
-                mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
-                mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
+            if (!mHardwareFlashSupported &&
+                    mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
+                    mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
                 /* No hardware flash & front camera, clear the screen */
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    mFlashView.setVisibility(View.GONE);
-                }
-            });
-        }
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mFlashView.setVisibility(View.GONE);
+                    }
+                });
+            }
 
-        File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
-        if (pictureFile == null) {
-            return;
-        }
+            File pictureFile = getOutputImageFile();
+            if (pictureFile == null) {
+                return;
+            }
 
-        try {
+            try {
                 /* Save the image */
-            FileOutputStream fos = new FileOutputStream(pictureFile);
-            fos.write(data);
-            fos.close();
+                FileOutputStream fos = new FileOutputStream(pictureFile);
+                fos.write(data);
+                fos.close();
 
                 /* Notify the media scanner so it displays in teh gallery */
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
+                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
 
                 /* A little feedback */
-            Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-        } catch (IOException e) {
+                Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+            } catch (IOException e) {
                 /* Eat it */
-        }
+            }
 
             /* Restart the preview */
-        mCamera.startPreview();
-    }
-};
-
-public static final int MEDIA_TYPE_IMAGE = 1;
-public static final int MEDIA_TYPE_VIDEO = 2;
+            mCamera.startPreview();
+        }
+    };
 
     /**
      * Create a File for saving an image or video
      */
-    private File getOutputMediaFile(int type) {
+    @Nullable
+    private File getOutputImageFile() {
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.
 
@@ -474,18 +494,8 @@ public static final int MEDIA_TYPE_VIDEO = 2;
 
         // Create a media file name
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        File mediaFile;
-        if (type == MEDIA_TYPE_IMAGE) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                    "IMG_" + timeStamp + ".jpg");
-        } else if (type == MEDIA_TYPE_VIDEO) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                    "VID_" + timeStamp + ".mp4");
-        } else {
-            return null;
-        }
-
-        return mediaFile;
+        return new File(mediaStorageDir.getPath() + File.separator +
+                "IMG_" + timeStamp + ".jpg");
     }
 
     @Override

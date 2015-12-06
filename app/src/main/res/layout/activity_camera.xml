@@ -49,4 +49,17 @@
         android:keepScreenOn="true"
         android:background="@android:color/white"
         android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/no_stick_text"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="@string/no_stick_warning"
+        android:textSize="72sp"
+        android:fontFamily="sans-serif-medium"
+        android:textAllCaps="true"
+        android:textColor="@android:color/white"
+
+        android:visibility="gone"/>
 </RelativeLayout>
