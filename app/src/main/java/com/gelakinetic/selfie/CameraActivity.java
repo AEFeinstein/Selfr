@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.hardware.Camera;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -13,6 +14,7 @@ import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.OrientationEventListener;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.Toast;
@@ -24,11 +26,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
  * status bar and navigation/system bar) with user interaction.
  */
+@SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
     /**
      * Whether or not the system UI should be auto-hidden after
@@ -101,13 +106,15 @@ public class CameraActivity extends AppCompatActivity {
         }
     };
 
-    private HeadsetStateReceiver mHeadsetStateReceiver = new HeadsetStateReceiver();
+    private HeadsetStateReceiver mHeadsetStateReceiver;
     private AudioCapturer mAudioCapturer;
     private FileWriter mFileWriter = null;
-    private CameraPreview mPreview;
     private Camera mCamera;
     private Handler mHandler;
     private boolean mDebounce = false;
+    private CameraPreview mCameraPreview;
+    private int mDeviceRotation = 0;
+    private OrientationEventListener mOrientationEventListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,40 +140,6 @@ public class CameraActivity extends AppCompatActivity {
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
         findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
-
-        IAudioReceiver mAudioReceiver = new IAudioReceiver() {
-            @Override
-            public void capturedAudioReceived(short[] tempBuf) {
-
-                if(mDebounce) {
-                    return;
-                }
-                if(findMax(tempBuf) > 32000) {
-                    mCamera.takePicture(null, null, mPicture);
-                    mDebounce = true;
-                    mHandler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            mDebounce = false;
-                        }
-                    }, 3000);
-                }
-            }
-        };
-
-        mAudioCapturer = AudioCapturer.getInstance(mAudioReceiver);
-        mCamera = getCameraInstance();
-        mPreview = new CameraPreview(this, mCamera);
-        mContentView.addView(mPreview);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (mCamera != null){
-            mCamera.release();        // release the camera for other applications
-            mCamera = null;
-        }
     }
 
     short findMax(short[] array) {
@@ -179,26 +152,103 @@ public class CameraActivity extends AppCompatActivity {
         return max;
     }
 
-    short findMin(short[] array) {
-        short min = Short.MAX_VALUE;
-        for (short element : array) {
-            if (element < min) {
-                min = element;
-            }
-        }
-        return min;
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
+
+        /* Set up the audio capture */
+        mAudioCapturer = AudioCapturer.getInstance(new IAudioReceiver() {
+            @Override
+            public void capturedAudioReceived(short[] tempBuf) {
+
+                if (mDebounce) {
+                    return;
+                }
+                if (findMax(tempBuf) > 32000) {
+                    /* Set rotation */
+                    Camera.Parameters parameters = mCamera.getParameters();
+                    parameters.setRotation(mDeviceRotation);
+                    mCamera.setParameters(parameters);
+
+                    mCamera.takePicture(null, null, mPicture);
+                    mDebounce = true;
+                    mHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            mDebounce = false;
+                        }
+                    }, 3000);
+                }
+            }
+        });
+
+        /* Set up the camera */
+        mCamera = getCameraInstance(Camera.CameraInfo.CAMERA_FACING_FRONT);
+        mCameraPreview = new CameraPreview(this, mCamera);
+        mContentView.addView(mCameraPreview);
+
+        /* Register the headset state receiver */
+        mHeadsetStateReceiver = new HeadsetStateReceiver();
         registerReceiver(mHeadsetStateReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
+
+        /* Set up the accelerometer */
+        mOrientationEventListener = new OrientationEventListener(this, SensorManager.SENSOR_DELAY_NORMAL) {
+            @Override
+            public void onOrientationChanged(int orientation) {
+                /* If the orientation is unknown, don't bother */
+                if (orientation == ORIENTATION_UNKNOWN) {
+                    return;
+                }
+
+                /* Clamp rotation to nearest 90 degree wedge */
+                int rotation = 0;
+                if(315 <= orientation || orientation < 45) {
+                    rotation = 270;
+                }
+                else if(45 <= orientation && orientation < 135) {
+                    rotation = 180;
+                }
+                else if(135 <= orientation && orientation < 225) {
+                    rotation = 90;
+                }
+                else if(225 <= orientation && orientation < 315) {
+                    rotation = 0;
+                }
+
+                /* Take into account which way the camera is pointing */
+                android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
+                if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                    rotation = (360 - rotation);
+                }
+                mDeviceRotation = rotation;
+            }
+        };
+        if (mOrientationEventListener.canDetectOrientation()) {
+            mOrientationEventListener.enable();
+        }
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
+    protected void onPause() {
+        super.onPause();
+
+        /* Clean up the camera */
+        mContentView.removeView(mCameraPreview);
+        mCamera.stopPreview();
+        mCamera.release();
+        mCamera = null;
+
+        /* Clean up the audio */
+        mAudioCapturer.stop();
+        mAudioCapturer = null;
+
+        /* Clean up the receiver */
         unregisterReceiver(mHeadsetStateReceiver);
+        mHeadsetStateReceiver = null;
+
+        /* Clean up the accelerometer */
+        mOrientationEventListener.disable();
+        mOrientationEventListener = null;
     }
 
     @Override
@@ -260,12 +310,6 @@ public class CameraActivity extends AppCompatActivity {
             int state = intent.getExtras().getInt("state");
             int microphone = intent.getExtras().getInt("microphone");
             if (state == 1 && microphone == 1) {
-                // TODO uncomment to enable audio logging
-//                try {
-//                    mFileWriter = new FileWriter(new File(getExternalFilesDir(null), "Selfie.txt"), true);
-//                } catch (IOException e) {
-//                    mFileWriter = null;
-//                }
                 mAudioCapturer.start();
             } else {
                 mAudioCapturer.stop();
@@ -277,20 +321,31 @@ public class CameraActivity extends AppCompatActivity {
                 mFileWriter = null;
             }
         }
+
     }
 
     /**
      * A safe way to get an instance of the Camera object.
      */
-    public static Camera getCameraInstance() {
+    public static Camera getCameraInstance(int cameraType) {
         Camera c = null;
         try {
             Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
             for (int camIdx = 0; camIdx < Camera.getNumberOfCameras(); camIdx++) {
                 Camera.getCameraInfo(camIdx, cameraInfo);
-                if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                if (cameraInfo.facing == cameraType) {
                     try {
+                        /* Open the camera, get default parameters */
                         c = Camera.open(camIdx);
+                        Camera.Parameters parameters = c.getParameters();
+
+                        /* Set the image to native resolution */
+                        List<Camera.Size> sizes = parameters.getSupportedPictureSizes();
+                        Camera.Size nativeSize = sizes.get(0); // TODO search for largest?
+                        parameters.setPictureSize(nativeSize.width, nativeSize.height);
+
+                        /* Set the parameters */
+                        c.setParameters(parameters);
                     } catch (RuntimeException e) {
                         Log.e(TAG, "Camera failed to open: " + e.getLocalizedMessage());
                     }
@@ -308,7 +363,7 @@ public class CameraActivity extends AppCompatActivity {
         public void onPictureTaken(byte[] data, Camera camera) {
 
             File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
-            if (pictureFile == null){
+            if (pictureFile == null) {
                 Log.d(TAG, "Error creating media file, check storage permissions: ");
                 return;
             }
@@ -323,14 +378,19 @@ public class CameraActivity extends AppCompatActivity {
             } catch (IOException e) {
                 Log.d(TAG, "Error accessing file: " + e.getMessage());
             }
+
+            /* Restart the preview */
+            mCamera.startPreview();
         }
     };
 
     public static final int MEDIA_TYPE_IMAGE = 1;
     public static final int MEDIA_TYPE_VIDEO = 2;
 
-    /** Create a File for saving an image or video */
-    private static File getOutputMediaFile(int type){
+    /**
+     * Create a File for saving an image or video
+     */
+    private static File getOutputMediaFile(int type) {
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.
 
@@ -340,22 +400,22 @@ public class CameraActivity extends AppCompatActivity {
         // between applications and persist after your app has been uninstalled.
 
         // Create the storage directory if it does not exist
-        if (! mediaStorageDir.exists()){
-            if (! mediaStorageDir.mkdirs()){
+        if (!mediaStorageDir.exists()) {
+            if (!mediaStorageDir.mkdirs()) {
                 Log.d("MyCameraApp", "failed to create directory");
                 return null;
             }
         }
 
         // Create a media file name
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         File mediaFile;
-        if (type == MEDIA_TYPE_IMAGE){
+        if (type == MEDIA_TYPE_IMAGE) {
             mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                    "IMG_"+ timeStamp + ".jpg");
-        } else if(type == MEDIA_TYPE_VIDEO) {
+                    "IMG_" + timeStamp + ".jpg");
+        } else if (type == MEDIA_TYPE_VIDEO) {
             mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                    "VID_"+ timeStamp + ".mp4");
+                    "VID_" + timeStamp + ".mp4");
         } else {
             return null;
         }
