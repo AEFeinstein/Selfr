@@ -3,4 +3,5 @@
     <string name="photo_library">Photo Library</string>
     <string name="flash_setting">Flash Setting</string>
     <string name="camera_switch">Camera Switch</string>
+    <string name="permission_failure">Can\'t take selfies without permission!</string>
 </resources>

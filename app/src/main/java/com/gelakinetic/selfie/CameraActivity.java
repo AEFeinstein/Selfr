@@ -1,16 +1,21 @@
 package com.gelakinetic.selfie;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
@@ -36,6 +41,8 @@ import java.util.Locale;
  * <p/>
  * TODO document
  * TODO force audio through speaker, not headphone, remove toast
+ * TODO disable view without stick
+ * TODO check orientation for rear selfies
  */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
@@ -45,7 +52,7 @@ public class CameraActivity extends AppCompatActivity {
      * and a change of the status and navigation bar.
      */
     private static final int UI_ANIMATION_DELAY = 300;
-    private static final String TAG = "tag";
+    private static final int PERMISSION_REQUEST_CODE = 162;
     private final Handler mHideHandler = new Handler();
     private FrameLayout mContentView;
     private final Runnable mHidePart2Runnable = new Runnable() {
@@ -91,6 +98,9 @@ public class CameraActivity extends AppCompatActivity {
     private int mDeviceRotation = 0;
     private OrientationEventListener mOrientationEventListener;
     private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
+    private String mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
+    private boolean mHardwareFlashSupported = false;
+    private FrameLayout mFlashView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,6 +111,7 @@ public class CameraActivity extends AppCompatActivity {
         mVisible = true;
         mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = (FrameLayout) findViewById(R.id.fullscreen_content);
+        mFlashView = (FrameLayout) findViewById(R.id.flash_view);
 
         mHandler = new Handler();
 
@@ -130,7 +141,24 @@ public class CameraActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-        /* Set up the audio capture */
+        /* If we do not have the required permissions */
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            /* Request the permissions */
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO},
+                    PERMISSION_REQUEST_CODE);
+        } else {
+            initializeHardware();
+        }
+    }
+
+    private void initializeHardware() {
+         /* Set up the audio capture */
         mAudioCapturer = AudioCapturer.getInstance(new IAudioReceiver() {
             @Override
             public void capturedAudioReceived(short[] tempBuf) {
@@ -143,6 +171,18 @@ public class CameraActivity extends AppCompatActivity {
                     Camera.Parameters parameters = mCamera.getParameters();
                     parameters.setRotation(mDeviceRotation);
                     mCamera.setParameters(parameters);
+
+                    if (!mHardwareFlashSupported &&
+                            mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
+                            mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
+                        /* No hardware flash & front camera, draw the screen bright white */
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                mFlashView.setVisibility(View.VISIBLE);
+                            }
+                        });
+                    }
 
                     mCamera.takePicture(null, null, mPicture);
                     mDebounce = true;
@@ -200,26 +240,60 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        boolean allPermissionsGranted = true;
+        if(requestCode == PERMISSION_REQUEST_CODE) {
+            for( int i = 0; i < grantResults.length; i++) {
+                switch (permissions[i]) {
+                    case Manifest.permission.CAMERA:
+                    case Manifest.permission.WRITE_EXTERNAL_STORAGE:
+                    case Manifest.permission.RECORD_AUDIO: {
+                        if(grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                            allPermissionsGranted = false;
+                        }
+                        break;
+                    }
+                    default: {
+                        /* Some unknown permission */
+                    }
+                }
+            }
+        }
+        if(!allPermissionsGranted) {
+            Toast.makeText(this, getString(R.string.permission_failure), Toast.LENGTH_LONG).show();
+            this.finish();
+        }
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
 
         /* Clean up the camera */
         mContentView.removeView(mCameraPreview);
-        mCamera.stopPreview();
-        mCamera.release();
-        mCamera = null;
+        if(mCamera != null) {
+            mCamera.stopPreview();
+            mCamera.release();
+            mCamera = null;
+        }
 
         /* Clean up the audio */
-        mAudioCapturer.stop();
-        mAudioCapturer = null;
+        if(mAudioCapturer != null) {
+            mAudioCapturer.stop();
+            mAudioCapturer = null;
+        }
 
         /* Clean up the receiver */
-        unregisterReceiver(mHeadsetStateReceiver);
-        mHeadsetStateReceiver = null;
+        if(mHeadsetStateReceiver != null) {
+            unregisterReceiver(mHeadsetStateReceiver);
+            mHeadsetStateReceiver = null;
+        }
 
         /* Clean up the accelerometer */
-        mOrientationEventListener.disable();
-        mOrientationEventListener = null;
+        if(mOrientationEventListener != null) {
+            mOrientationEventListener.disable();
+            mOrientationEventListener = null;
+        }
     }
 
     @Override
@@ -271,25 +345,25 @@ public class CameraActivity extends AppCompatActivity {
         mHideHandler.postDelayed(mHideRunnable, delayMillis);
     }
 
-    private class HeadsetStateReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            int state = intent.getExtras().getInt("state");
-            int microphone = intent.getExtras().getInt("microphone");
-            if (state == 1 && microphone == 1) {
-                mAudioCapturer.start();
-            } else {
-                mAudioCapturer.stop();
-                try {
-                    mFileWriter.close();
-                } catch (IOException | NullPointerException e) {
+private class HeadsetStateReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        int state = intent.getExtras().getInt("state");
+        int microphone = intent.getExtras().getInt("microphone");
+        if (state == 1 && microphone == 1) {
+            mAudioCapturer.start();
+        } else {
+            mAudioCapturer.stop();
+            try {
+                mFileWriter.close();
+            } catch (IOException | NullPointerException e) {
                     /* eat it */
-                }
-                mFileWriter = null;
             }
+            mFileWriter = null;
         }
-
     }
+
+}
 
     /**
      * A safe way to get an instance of the Camera object.
@@ -308,8 +382,17 @@ public class CameraActivity extends AppCompatActivity {
 
                         /* Set the image to native resolution */
                         List<Camera.Size> sizes = parameters.getSupportedPictureSizes();
-                        Camera.Size nativeSize = sizes.get(0); // TODO search for largest?
-                        parameters.setPictureSize(nativeSize.width, nativeSize.height);
+                        Camera.Size nativeSize = null;
+                        int maxHeight = Integer.MIN_VALUE;
+                        for (Camera.Size size : sizes) {
+                            if (size.height > maxHeight) {
+                                maxHeight = size.height;
+                                nativeSize = size;
+                            }
+                        }
+                        if (nativeSize != null) {
+                            parameters.setPictureSize(nativeSize.width, nativeSize.height);
+                        }
 
                         /* Set the parameters */
                         c.setParameters(parameters);
@@ -325,38 +408,50 @@ public class CameraActivity extends AppCompatActivity {
         return c; // returns null if camera is unavailable
     }
 
-    private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
+private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
 
-        @Override
-        public void onPictureTaken(byte[] data, Camera camera) {
+    @Override
+    public void onPictureTaken(byte[] data, Camera camera) {
 
-            File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
-            if (pictureFile == null) {
-                return;
-            }
+        if (!mHardwareFlashSupported &&
+                mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
+                mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
+                /* No hardware flash & front camera, clear the screen */
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mFlashView.setVisibility(View.GONE);
+                }
+            });
+        }
 
-            try {
+        File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
+        if (pictureFile == null) {
+            return;
+        }
+
+        try {
                 /* Save the image */
-                FileOutputStream fos = new FileOutputStream(pictureFile);
-                fos.write(data);
-                fos.close();
+            FileOutputStream fos = new FileOutputStream(pictureFile);
+            fos.write(data);
+            fos.close();
 
                 /* Notify the media scanner so it displays in teh gallery */
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
+            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
 
                 /* A little feedback */
-                Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-            } catch (IOException e) {
+            Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
                 /* Eat it */
-            }
+        }
 
             /* Restart the preview */
-            mCamera.startPreview();
-        }
-    };
+        mCamera.startPreview();
+    }
+};
 
-    public static final int MEDIA_TYPE_IMAGE = 1;
-    public static final int MEDIA_TYPE_VIDEO = 2;
+public static final int MEDIA_TYPE_IMAGE = 1;
+public static final int MEDIA_TYPE_VIDEO = 2;
 
     /**
      * Create a File for saving an image or video
@@ -366,7 +461,7 @@ public class CameraActivity extends AppCompatActivity {
         // using Environment.getExternalStorageState() before doing this.
 
         File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DCIM), getString(R.string.app_name)); // TODO check permissions
+                Environment.DIRECTORY_DCIM), getString(R.string.app_name));
         // This location works best if you want the created images to be shared
         // between applications and persist after your app has been uninstalled.
 
@@ -413,12 +508,12 @@ public class CameraActivity extends AppCompatActivity {
                 switch (mCameraType) {
                     case Camera.CameraInfo.CAMERA_FACING_FRONT: {
                         mCameraType = Camera.CameraInfo.CAMERA_FACING_BACK;
-                        item.setIcon(R.drawable.ic_camera_front_white_24dp);
+                        item.setIcon(R.drawable.ic_camera_rear_white_24dp);
                         break;
                     }
                     case Camera.CameraInfo.CAMERA_FACING_BACK: {
                         mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
-                        item.setIcon(R.drawable.ic_camera_rear_white_24dp);
+                        item.setIcon(R.drawable.ic_camera_front_white_24dp);
                         break;
                     }
                 }
@@ -433,13 +528,56 @@ public class CameraActivity extends AppCompatActivity {
                 mCameraPreview = new CameraPreview(this, mCamera);
                 mContentView.addView(mCameraPreview);
 
+                /* Make sure the flash parameter is correct */
+                setFlashParameter();
+
                 return true;
             }
             case R.id.flash_setting: {
+
+                /* Change the flash mode */
+                switch (mFlashMode) {
+                    case Camera.Parameters.FLASH_MODE_OFF: {
+                        mFlashMode = Camera.Parameters.FLASH_MODE_ON;
+                        item.setIcon(R.drawable.ic_flash_on_white_24dp);
+                        break;
+                    }
+                    case Camera.Parameters.FLASH_MODE_ON: {
+                        mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
+                        item.setIcon(R.drawable.ic_flash_off_white_24dp);
+                        break;
+                    }
+                }
+                /* Then set the parameter */
+                setFlashParameter();
                 return true;
             }
             default:
                 return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void setFlashParameter() {
+        /* If the camera supports flash, set the parameter */
+        Camera.Parameters parameters = mCamera.getParameters();
+        List<String> flashModes = parameters.getSupportedFlashModes();
+        if (flashModes != null &&
+                flashModes.contains(Camera.Parameters.FLASH_MODE_OFF) &&
+                flashModes.contains(Camera.Parameters.FLASH_MODE_OFF)) {
+            switch (mFlashMode) {
+                case Camera.Parameters.FLASH_MODE_OFF: {
+                    parameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+                    break;
+                }
+                case Camera.Parameters.FLASH_MODE_ON: {
+                    parameters.setFlashMode(Camera.Parameters.FLASH_MODE_ON);
+                    break;
+                }
+            }
+            mCamera.setParameters(parameters);
+            mHardwareFlashSupported = true;
+        } else {
+            mHardwareFlashSupported = false;
         }
     }
 }
