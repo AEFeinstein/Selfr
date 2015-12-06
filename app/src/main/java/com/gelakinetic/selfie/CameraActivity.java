@@ -12,14 +12,15 @@ import android.os.Environment;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.OrientationEventListener;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -31,6 +32,9 @@ import java.util.Locale;
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
  * status bar and navigation/system bar) with user interaction.
+ *
+ * TODO document
+ * TODO force audio through speaker, not headphone, remove toast
  */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
@@ -307,8 +311,9 @@ public class CameraActivity extends AppCompatActivity {
 
                         /* Set the parameters */
                         c.setParameters(parameters);
+
                     } catch (RuntimeException e) {
-                        Log.e(TAG, "Camera failed to open: " + e.getLocalizedMessage());
+                        /* Eat it */
                     }
                 }
             }
@@ -325,7 +330,6 @@ public class CameraActivity extends AppCompatActivity {
 
             File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
             if (pictureFile == null) {
-                Log.d(TAG, "Error creating media file, check storage permissions: ");
                 return;
             }
 
@@ -334,10 +338,8 @@ public class CameraActivity extends AppCompatActivity {
                 fos.write(data);
                 fos.close();
                 Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-            } catch (FileNotFoundException e) {
-                Log.d(TAG, "File not found: " + e.getMessage());
             } catch (IOException e) {
-                Log.d(TAG, "Error accessing file: " + e.getMessage());
+                /* Eat it */
             }
 
             /* Restart the preview */
@@ -351,19 +353,18 @@ public class CameraActivity extends AppCompatActivity {
     /**
      * Create a File for saving an image or video
      */
-    private static File getOutputMediaFile(int type) {
+    private File getOutputMediaFile(int type) {
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.
 
         File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES), "MyCameraApp");
+                Environment.DIRECTORY_DCIM), getString(R.string.app_name)); // TODO check permissions
         // This location works best if you want the created images to be shared
         // between applications and persist after your app has been uninstalled.
 
         // Create the storage directory if it does not exist
         if (!mediaStorageDir.exists()) {
             if (!mediaStorageDir.mkdirs()) {
-                Log.d("MyCameraApp", "failed to create directory");
                 return null;
             }
         }
@@ -382,5 +383,25 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         return mediaFile;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.camera_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.photo_library:
+                Intent i = new Intent(Intent.ACTION_VIEW,
+                        android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+                startActivity(i);
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
     }
 }

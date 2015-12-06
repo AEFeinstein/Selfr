@@ -3,7 +3,6 @@ package com.gelakinetic.selfie;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
-import android.util.Log;
 
 public class AudioCapturer implements Runnable {
 
@@ -33,7 +32,6 @@ public class AudioCapturer implements Runnable {
         int samplePerSec = SAMPLES_PER_SECOND;
         int bufferSize = AudioRecord.getMinBufferSize(samplePerSec, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
 
-        String LOG_TAG = "AudioCapturer";
         if (bufferSize != AudioRecord.ERROR_BAD_VALUE && bufferSize != AudioRecord.ERROR) {
 
             audioRecorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, samplePerSec, AudioFormat.CHANNEL_IN_MONO,
@@ -41,20 +39,12 @@ public class AudioCapturer implements Runnable {
             // 10x
 
             if (audioRecorder.getState() == AudioRecord.STATE_INITIALIZED) {
-                Log.i(LOG_TAG, "Audio Recorder created");
-
-
                 audioRecorder.startRecording();
                 isRecording = true;
                 thread = new Thread(this);
                 thread.start();
 
-            } else {
-                Log.e(LOG_TAG, "Unable to create AudioRecord instance");
             }
-
-        } else {
-            Log.e(LOG_TAG, "Unable to get minimum buffer size");
         }
     }
 
