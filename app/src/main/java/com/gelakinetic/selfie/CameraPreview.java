@@ -89,7 +89,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             }
         }
 
-        if(mPreviewSize != null) {
+        if (mPreviewSize != null) {
             float ratio;
             if (mPreviewSize.height >= mPreviewSize.width) {
                 ratio = (float) mPreviewSize.height / (float) mPreviewSize.width;
@@ -115,7 +115,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         for (Camera.Size size : sizes) {
             double ratio = Math.max(size.height, size.width) / Math.min(size.height, size.width);
             if (Math.abs(ratio - targetRatio) <= minRatioDiff) {
-                if(Math.abs(Math.max(size.height, size.width) - Math.max(h, w)) < minSizeDiff) {
+                if (Math.abs(Math.max(size.height, size.width) - Math.max(h, w)) < minSizeDiff) {
                     optimalSize = size;
                     minRatioDiff = Math.abs(ratio - targetRatio);
                     minSizeDiff = Math.abs(Math.max(size.height, size.width) - Math.max(h, w));

@@ -6,19 +6,16 @@ import android.media.MediaRecorder;
 
 public class AudioCapturer implements Runnable {
 
+    private static final int SAMPLES_PER_SECOND = 16000;
+    private static AudioCapturer audioCapturer;
     private AudioRecord audioRecorder = null;
     private Thread thread = null;
-
     private boolean isRecording;
-    private static AudioCapturer audioCapturer;
-
     private IAudioReceiver iAudioReceiver;
 
     AudioCapturer(IAudioReceiver audioReceiver) {
         this.iAudioReceiver = audioReceiver;
     }
-
-    private static final int SAMPLES_PER_SECOND = 16000;
 
     public static AudioCapturer getInstance(IAudioReceiver audioReceiver) {
         if (audioCapturer == null) {
