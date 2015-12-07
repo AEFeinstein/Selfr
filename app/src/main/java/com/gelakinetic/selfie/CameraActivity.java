@@ -43,6 +43,8 @@ import java.util.Locale;
  * status bar and navigation/system bar) with user interaction.
  * <p/>
  * TODO document
+ * TODO make sure UI is autohidden
+ * TODO max brightess flash, hold screen longer
  */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
@@ -403,7 +405,7 @@ public class CameraActivity extends AppCompatActivity {
      */
     @Nullable
     public static Camera getCameraInstance(int cameraType) {
-        Camera c = null;
+        Camera camera = null;
         try {
             Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
             for (int camIdx = 0; camIdx < Camera.getNumberOfCameras(); camIdx++) {
@@ -411,8 +413,8 @@ public class CameraActivity extends AppCompatActivity {
                 if (cameraInfo.facing == cameraType) {
                     try {
                         /* Open the camera, get default parameters */
-                        c = Camera.open(camIdx);
-                        Camera.Parameters parameters = c.getParameters();
+                        camera = Camera.open(camIdx);
+                        Camera.Parameters parameters = camera.getParameters();
 
                         /* Set the image to native resolution */
                         List<Camera.Size> sizes = parameters.getSupportedPictureSizes();
@@ -428,8 +430,15 @@ public class CameraActivity extends AppCompatActivity {
                             parameters.setPictureSize(nativeSize.width, nativeSize.height);
                         }
 
+                        /* Set autofocus, if we can */
+                        List<String> focusModes = parameters.getSupportedFocusModes();
+                        if(focusModes != null &&
+                                focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
+                            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+                        }
+
                         /* Set the parameters */
-                        c.setParameters(parameters);
+                        camera.setParameters(parameters);
 
                     } catch (RuntimeException e) {
                         /* Eat it */
@@ -439,7 +448,7 @@ public class CameraActivity extends AppCompatActivity {
         } catch (Exception e) {
             // Camera is not available (in use or does not exist)
         }
-        return c; // returns null if camera is unavailable
+        return camera; // returns null if camera is unavailable
     }
 
     private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
