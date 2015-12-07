@@ -24,6 +24,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.OrientationEventListener;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -37,9 +38,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * TODO max brightess flash, hold screen longer
- */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
 
@@ -49,6 +47,38 @@ public class CameraActivity extends AppCompatActivity {
 
     /* UI Objects */
     private FrameLayout mContentView;
+    private FrameLayout mFlashView;
+    private TextView mNoStickWarningView;
+    private View mControlsView;
+
+    /* State objects */
+    private boolean mControlsVisible;
+    private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
+    private String mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
+    private boolean mHardwareFlashSupported = false;
+    private boolean mDebounce = false;
+    private int mDeviceRotation = 0;
+    private float mOldBrightness;
+
+    /* Hardware interface objects */
+    private HeadsetStateReceiver mHeadsetStateReceiver;
+    private AudioCapturer mAudioCapturer;
+    private Camera mCamera;
+    private CameraPreview mCameraPreview;
+    private OrientationEventListener mOrientationEventListener;
+
+    /* Handler and Runnables */
+    private Handler mHandler;
+    private final Runnable mHideRunnable = new Runnable() {
+        /**
+         * TODO
+         */
+        @Override
+        public void run() {
+            hide();
+        }
+    };
+
     private final Runnable mHidePart2Runnable = new Runnable() {
         /**
          * TODO
@@ -69,7 +99,7 @@ public class CameraActivity extends AppCompatActivity {
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
         }
     };
-    private View mControlsView;
+
     private final Runnable mShowRunnable = new Runnable() {
         /**
          * TODO
@@ -80,32 +110,7 @@ public class CameraActivity extends AppCompatActivity {
             mControlsView.setVisibility(View.VISIBLE);
         }
     };
-    private FrameLayout mFlashView;
-    private TextView mNoStickWarningView;
-    /* State objects */
-    private boolean mControlsVisible;
-    private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
-    private String mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
-    private boolean mHardwareFlashSupported = false;
-    private boolean mDebounce = false;
-    private int mDeviceRotation = 0;
-    /* Hardware interface objects */
-    private HeadsetStateReceiver mHeadsetStateReceiver;
-    private AudioCapturer mAudioCapturer;
-    private Camera mCamera;
-    private CameraPreview mCameraPreview;
-    private OrientationEventListener mOrientationEventListener;
-    /* Handler and Runnables */
-    private Handler mHandler;
-    private final Runnable mHideRunnable = new Runnable() {
-        /**
-         * TODO
-         */
-        @Override
-        public void run() {
-            hide();
-        }
-    };
+
     private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
 
         /**
@@ -128,6 +133,12 @@ public class CameraActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        /* Restore the brightness */
+                        WindowManager.LayoutParams layout = getWindow().getAttributes();
+                        layout.screenBrightness = mOldBrightness;
+                        getWindow().setAttributes(layout);
+
+                        /* Hide the "flash" view */
                         mFlashView.setVisibility(View.GONE);
                     }
                 });
@@ -158,6 +169,27 @@ public class CameraActivity extends AppCompatActivity {
                     mCamera.startPreview();
                 }
             }, 1000);
+        }
+    };
+
+    private Runnable takePictureRunnable = new Runnable() {
+        /**
+         * TODO
+         */
+        @Override
+        public void run() {
+            try {
+                mCamera.takePicture(null, null, mPicture);
+                mDebounce = true;
+                mHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        mDebounce = false;
+                    }
+                }, 3000);
+            } catch (RuntimeException e) {
+                /* That didn't work... */
+            }
         }
     };
 
@@ -280,6 +312,10 @@ public class CameraActivity extends AppCompatActivity {
             /* Otherwise, fire everything up */
             /* Set up the audio capture */
             mAudioCapturer = AudioCapturer.getInstance(new IAudioReceiver() {
+                /**
+                 * TODO
+                 * @param tempBuf
+                 */
                 @Override
                 public void capturedAudioReceived(short[] tempBuf) {
 
@@ -300,27 +336,30 @@ public class CameraActivity extends AppCompatActivity {
                                 runOnUiThread(new Runnable() {
                                     @Override
                                     public void run() {
+                                        /* Save the old brightness, set current to max */
+                                        WindowManager.LayoutParams layout = getWindow().getAttributes();
+                                        mOldBrightness = layout.screenBrightness;
+                                        layout.screenBrightness = 1F;
+                                        getWindow().setAttributes(layout);
+                                        /* Show the "flash" screen */
                                         mFlashView.setVisibility(View.VISIBLE);
+                                        /* Take a picture, after letting the "flash" settle */
+                                        mHandler.postDelayed(takePictureRunnable, 2000);
                                     }
                                 });
-                            }
-
-                            try {
-                                mCamera.takePicture(null, null, mPicture);
-                                mDebounce = true;
-                                mHandler.postDelayed(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        mDebounce = false;
-                                    }
-                                }, 3000);
-                            } catch (RuntimeException e) {
-                                /* That didn't work... */
+                            } else {
+                                /* Take a picture immediately */
+                                takePictureRunnable.run();
                             }
                         }
                     }
                 }
 
+                /**
+                 * TODO
+                 * @param array
+                 * @return
+                 */
                 short findMax(short[] array) {
                     short max = Short.MIN_VALUE;
                     for (short element : array) {
@@ -343,6 +382,10 @@ public class CameraActivity extends AppCompatActivity {
 
             /* Set up the accelerometer */
             mOrientationEventListener = new OrientationEventListener(CameraActivity.this, SensorManager.SENSOR_DELAY_NORMAL) {
+                /**
+                 * TODO
+                 * @param orientation
+                 */
                 @Override
                 public void onOrientationChanged(int orientation) {
                     /* If the orientation is unknown, don't bother */
