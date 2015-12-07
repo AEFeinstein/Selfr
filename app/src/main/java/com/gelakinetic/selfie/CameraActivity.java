@@ -44,7 +44,6 @@ import java.util.Locale;
  * <p/>
  * TODO document
  * TODO force audio through speaker, not headphone, remove toast
- * TODO check orientation for rear selfies
  */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
@@ -174,31 +173,33 @@ public class CameraActivity extends AppCompatActivity {
                     return;
                 }
                 if (findMax(tempBuf) > 32000) {
-                    /* Set rotation */
-                    Camera.Parameters parameters = mCamera.getParameters();
-                    parameters.setRotation(mDeviceRotation);
-                    mCamera.setParameters(parameters);
+                    if (mCamera != null) {
+                        /* Set rotation */
+                        Camera.Parameters parameters = mCamera.getParameters();
+                        parameters.setRotation(mDeviceRotation);
+                        mCamera.setParameters(parameters);
 
-                    if (!mHardwareFlashSupported &&
-                            mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
-                            mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
-                        /* No hardware flash & front camera, draw the screen bright white */
-                        runOnUiThread(new Runnable() {
+                        if (!mHardwareFlashSupported &&
+                                mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
+                                mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
+                            /* No hardware flash & front camera, draw the screen bright white */
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mFlashView.setVisibility(View.VISIBLE);
+                                }
+                            });
+                        }
+
+                        mCamera.takePicture(null, null, mPicture);
+                        mDebounce = true;
+                        mHandler.postDelayed(new Runnable() {
                             @Override
                             public void run() {
-                                mFlashView.setVisibility(View.VISIBLE);
+                                mDebounce = false;
                             }
-                        });
+                        }, 3000);
                     }
-
-                    mCamera.takePicture(null, null, mPicture);
-                    mDebounce = true;
-                    mHandler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            mDebounce = false;
-                        }
-                    }, 3000);
                 }
             }
 
@@ -233,21 +234,29 @@ public class CameraActivity extends AppCompatActivity {
 
                 /* Clamp rotation to nearest 90 degree wedge */
                 int rotation = 0;
-                if (315 <= orientation || orientation < 45) {
-                    rotation = 270;
-                } else if (45 <= orientation && orientation < 135) {
-                    rotation = 180;
-                } else if (135 <= orientation && orientation < 225) {
-                    rotation = 90;
-                } else if (225 <= orientation && orientation < 315) {
-                    rotation = 0;
+                android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
+                if(info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                    if (315 <= orientation || orientation < 45) {
+                        rotation = 270;
+                    } else if (45 <= orientation && orientation < 135) {
+                        rotation = 180;
+                    } else if (135 <= orientation && orientation < 225) {
+                        rotation = 90;
+                    } else if (225 <= orientation && orientation < 315) {
+                        rotation = 0;
+                    }
+                } else {
+                    if (315 <= orientation || orientation < 45) {
+                        rotation = 90;
+                    } else if (45 <= orientation && orientation < 135) {
+                        rotation = 180;
+                    } else if (135 <= orientation && orientation < 225) {
+                        rotation = 270;
+                    } else if (225 <= orientation && orientation < 315) {
+                        rotation = 0;
+                    }
                 }
 
-                /* Take into account which way the camera is pointing */
-                android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
-                if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                    rotation = (360 - rotation);
-                }
                 mDeviceRotation = rotation;
             }
         };

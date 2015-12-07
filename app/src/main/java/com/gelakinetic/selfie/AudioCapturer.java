@@ -56,9 +56,7 @@ public class AudioCapturer implements Runnable {
                 // .println("Stopping the recorder inside AudioRecorder");
                 audioRecorder.stop();
             }
-            if (audioRecorder.getState() == AudioRecord.STATE_INITIALIZED) {
-                audioRecorder.release();
-            }
+            audioRecorder.release();
         }
     }
 
