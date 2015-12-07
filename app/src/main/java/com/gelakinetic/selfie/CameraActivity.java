@@ -43,7 +43,6 @@ import java.util.Locale;
  * status bar and navigation/system bar) with user interaction.
  * <p/>
  * TODO document
- * TODO force audio through speaker, not headphone, remove toast
  */
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity {
@@ -191,14 +190,18 @@ public class CameraActivity extends AppCompatActivity {
                             });
                         }
 
-                        mCamera.takePicture(null, null, mPicture);
-                        mDebounce = true;
-                        mHandler.postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                mDebounce = false;
-                            }
-                        }, 3000);
+                        try {
+                            mCamera.takePicture(null, null, mPicture);
+                            mDebounce = true;
+                            mHandler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mDebounce = false;
+                                }
+                            }, 3000);
+                        } catch (RuntimeException e) {
+                            /* That didn't work... */
+                        }
                     }
                 }
             }
@@ -235,7 +238,7 @@ public class CameraActivity extends AppCompatActivity {
                 /* Clamp rotation to nearest 90 degree wedge */
                 int rotation = 0;
                 android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
-                if(info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
                     if (315 <= orientation || orientation < 45) {
                         rotation = 270;
                     } else if (45 <= orientation && orientation < 135) {
@@ -444,10 +447,15 @@ public class CameraActivity extends AppCompatActivity {
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
 
+            /* Freeze the picture on the screen */
+            mCamera.stopPreview();
+
+            /* Clear the flash screen, if there is no hardware flash
+             * and the front facing camera was used
+             */
             if (!mHardwareFlashSupported &&
                     mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
                     mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
-                /* No hardware flash & front camera, clear the screen */
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -456,6 +464,7 @@ public class CameraActivity extends AppCompatActivity {
                 });
             }
 
+            /* Get a file to write the picture to */
             File pictureFile = getOutputImageFile();
             if (pictureFile == null) {
                 return;
@@ -469,15 +478,17 @@ public class CameraActivity extends AppCompatActivity {
 
                 /* Notify the media scanner so it displays in teh gallery */
                 sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
-
-                /* A little feedback */
-                Toast.makeText(CameraActivity.this, pictureFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
                 /* Eat it */
             }
 
-            /* Restart the preview */
-            mCamera.startPreview();
+            /* Restart the preview later */
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    mCamera.startPreview();
+                }
+            }, 1000);
         }
     };
 
