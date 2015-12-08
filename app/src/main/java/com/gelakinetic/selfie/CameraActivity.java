@@ -297,6 +297,13 @@ public class CameraActivity extends AppCompatActivity {
 
         Toolbar mToolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(mToolbar);
+        mToolbar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // TODO
+                Toast.makeText(CameraActivity.this, "Version Info", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     /**
@@ -629,64 +636,91 @@ public class CameraActivity extends AppCompatActivity {
                 startActivity(i);
                 return true;
             case R.id.camera_switch: {
-                /* Switch from one camera type to the other, adjust the icon as necessary */
-                switch (mCameraType) {
-                    case Camera.CameraInfo.CAMERA_FACING_FRONT: {
-                        mCameraType = Camera.CameraInfo.CAMERA_FACING_BACK;
-                        item.setIcon(R.drawable.ic_camera_rear_white_24dp);
-                        break;
-                    }
-                    case Camera.CameraInfo.CAMERA_FACING_BACK: {
-                        mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
-                        item.setIcon(R.drawable.ic_camera_front_white_24dp);
-                        break;
-                    }
-                }
-
-                /* Remove old camera & preview */
-                mContentView.removeView(mCameraPreview);
-                mCamera.stopPreview();
-                mCamera.release();
-
-                /* Make a new camera & preview */
-                mCamera = getCameraInstance(mCameraType);
-                mCameraPreview = new CameraPreview(this, mCamera);
-                mContentView.addView(mCameraPreview);
-
-                /* Make sure the flash parameter is correct */
-                setFlashParameter();
-
-                /* Hide the UI */
-                delayedHide(2500);
-
+                switchCamera(item);
                 return true;
             }
             case R.id.flash_setting: {
-
-                /* Change the flash mode */
-                switch (mFlashMode) {
-                    case Camera.Parameters.FLASH_MODE_OFF: {
-                        mFlashMode = Camera.Parameters.FLASH_MODE_ON;
-                        item.setIcon(R.drawable.ic_flash_on_white_24dp);
-                        break;
-                    }
-                    case Camera.Parameters.FLASH_MODE_ON: {
-                        mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
-                        item.setIcon(R.drawable.ic_flash_off_white_24dp);
-                        break;
-                    }
-                }
-                /* Then set the parameter */
-                setFlashParameter();
-
-                /* Hide the UI */
-                delayedHide(2500);
-
+                switchFlash(item);
                 return true;
             }
             default:
                 return super.onOptionsItemSelected(item);
         }
+    }
+
+    /**
+     * TODO
+     * @param item
+     */
+    private void switchFlash(MenuItem item) {
+        /* Change the flash mode */
+        switch (mFlashMode) {
+            case Camera.Parameters.FLASH_MODE_OFF: {
+                mFlashMode = Camera.Parameters.FLASH_MODE_ON;
+                item.setIcon(R.drawable.ic_flash_on_white_24dp);
+                break;
+            }
+            case Camera.Parameters.FLASH_MODE_ON: {
+                mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
+                item.setIcon(R.drawable.ic_flash_off_white_24dp);
+                break;
+            }
+        }
+        /* Then set the parameter */
+        setFlashParameter();
+
+        /* Hide the UI */
+        delayedHide(2500);
+    }
+
+    /**
+     * TODO
+     * @param item
+     */
+    private void switchCamera(MenuItem item) {
+         /* Switch from one camera type to the other, adjust the icon as necessary */
+        switch (mCameraType) {
+            case Camera.CameraInfo.CAMERA_FACING_FRONT: {
+                mCameraType = Camera.CameraInfo.CAMERA_FACING_BACK;
+                item.setIcon(R.drawable.ic_camera_rear_white_24dp);
+                break;
+            }
+            case Camera.CameraInfo.CAMERA_FACING_BACK: {
+                mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
+                item.setIcon(R.drawable.ic_camera_front_white_24dp);
+                break;
+            }
+        }
+
+        /* Remove old camera & preview */
+        mContentView.removeView(mCameraPreview);
+
+        /* Getting a camera instance can take time, so do it on a background thread */
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                mCamera.stopPreview();
+                mCamera.release();
+
+                /* Make a new camera & preview */
+                mCamera = getCameraInstance(mCameraType);
+
+                /* When it's done, set the UI on the UI thread */
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
+                        mContentView.addView(mCameraPreview);
+
+                        /* Make sure the flash parameter is correct */
+                        setFlashParameter();
+                    }
+                });
+            }
+        }).start();
+
+        /* Hide the UI */
+        delayedHide(2500);
     }
 
     /**
