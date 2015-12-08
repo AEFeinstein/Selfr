@@ -25,6 +25,8 @@ import android.view.MenuItem;
 import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -42,7 +44,7 @@ import java.util.Locale;
 public class CameraActivity extends AppCompatActivity {
 
     /* Constants */
-    private static final int UI_ANIMATION_DELAY = 300;
+    private static final int UI_ANIMATION_DELAY = 200;
     private static final int PERMISSION_REQUEST_CODE = 162;
 
     /* UI Objects */
@@ -86,11 +88,11 @@ public class CameraActivity extends AppCompatActivity {
         @SuppressLint("InlinedApi")
         @Override
         public void run() {
-            // Delayed removal of status and navigation bar
-
-            // Note that some of these constants are new as of API 16 (Jelly Bean)
-            // and API 19 (KitKat). It is safe to use them, as they are inlined
-            // at compile-time and do nothing on earlier devices.
+            /* Delayed removal of status and navigation bar
+             * Note that some of these constants are new as of API 16 (Jelly Bean)
+             * and API 19 (KitKat). It is safe to use them, as they are inlined
+             * at compile-time and do nothing on earlier devices.
+             */
             mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE
                     | View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -106,8 +108,11 @@ public class CameraActivity extends AppCompatActivity {
          */
         @Override
         public void run() {
-            // Delayed display of UI elements
+            /* Delayed display of UI elements */
             mControlsView.setVisibility(View.VISIBLE);
+            Animation flyInAnimation = AnimationUtils.loadAnimation(getApplicationContext(),
+                    R.anim.animation_fly_in);
+            mControlsView.startAnimation(flyInAnimation);
         }
     };
 
@@ -258,9 +263,9 @@ public class CameraActivity extends AppCompatActivity {
                 }
             }
         } catch (Exception e) {
-            // Camera is not available (in use or does not exist)
+            /* Camera is not available (in use or does not exist) */
         }
-        return camera; // returns null if camera is unavailable
+        return camera; /* returns null if camera is unavailable */
     }
 
     /**
@@ -282,7 +287,7 @@ public class CameraActivity extends AppCompatActivity {
 
         mHandler = new Handler();
 
-        // Set up the user interaction to manually show or hide the system UI.
+        /* Set up the user interaction to manually show or hide the system UI. */
         mContentView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -534,11 +539,34 @@ public class CameraActivity extends AppCompatActivity {
      * TODO
      */
     private void hide() {
-        // Hide UI first
-        mControlsView.setVisibility(View.GONE);
         mControlsVisible = false;
 
-        // Schedule a runnable to remove the status and navigation bar after a delay
+        /* Hide UI first */
+
+        Animation flyInAnimation = AnimationUtils.loadAnimation(this, R.anim.animation_fly_out);
+        flyInAnimation.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+                /* Unused */
+            }
+
+            /**
+             * When the animation completes, hide the controls view
+             * @param animation The animation which reached its end.
+             */
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                mControlsView.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+                /* Unused */
+            }
+        });
+        mControlsView.startAnimation(flyInAnimation);
+
+        /* Schedule a runnable to remove the status and navigation bar after a delay */
         mHandler.removeCallbacks(mShowRunnable);
         mHandler.postDelayed(mHidePart2Runnable, UI_ANIMATION_DELAY);
     }
@@ -559,12 +587,12 @@ public class CameraActivity extends AppCompatActivity {
      */
     @SuppressLint("InlinedApi")
     private void show() {
-        // Show the system bar
+        /* Show the system bar */
         mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         mControlsVisible = true;
 
-        // Schedule a runnable to display UI elements after a delay
+        /* Schedule a runnable to display UI elements after a delay */
         mHandler.removeCallbacks(mHidePart2Runnable);
         mHandler.postDelayed(mShowRunnable, UI_ANIMATION_DELAY);
 
@@ -666,22 +694,22 @@ public class CameraActivity extends AppCompatActivity {
      */
     @Nullable
     private File getOutputImageFile() {
-        // To be safe, you should check that the SDCard is mounted
-        // using Environment.getExternalStorageState() before doing this.
+        /* To be safe, you should check that the SDCard is mounted */
+        /* using Environment.getExternalStorageState() before doing this. */
 
         File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_DCIM), getString(R.string.app_name));
-        // This location works best if you want the created images to be shared
-        // between applications and persist after your app has been uninstalled.
+        /* This location works best if you want the created images to be shared */
+        /* between applications and persist after your app has been uninstalled. */
 
-        // Create the storage directory if it does not exist
+        /* Create the storage directory if it does not exist */
         if (!mediaStorageDir.exists()) {
             if (!mediaStorageDir.mkdirs()) {
                 return null;
             }
         }
 
-        // Create a media file name
+        /* Create a media file name */
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
         return new File(mediaStorageDir.getPath() + File.separator +
                 "IMG_" + timeStamp + ".jpg");
