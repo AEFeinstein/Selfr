@@ -457,7 +457,7 @@ public class CameraActivity extends AppCompatActivity {
              * created, to briefly hint to the user that UI controls
              * are available.
              */
-            delayedHide(100);
+            delayedHide(2000);
         }
     }
 
