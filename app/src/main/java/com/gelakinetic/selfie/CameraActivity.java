@@ -121,9 +121,6 @@ public class CameraActivity extends AppCompatActivity {
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
 
-            /* Freeze the picture on the screen */
-            mCamera.stopPreview();
-
             /* Clear the flash screen, if there is no hardware flash
              * and the front facing camera was used
              */
@@ -143,6 +140,33 @@ public class CameraActivity extends AppCompatActivity {
                     }
                 });
             }
+            else {
+                runOnUiThread(new Runnable() {
+                    /**
+                     * Blackout the screen, like a shutter snap
+                     */
+                    @Override
+                    public void run() {
+                        mFlashView.setBackgroundColor(getResources().getColor(android.R.color.black));
+                        mFlashView.setVisibility(View.VISIBLE);
+                    }
+                });
+                mHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        runOnUiThread(new Runnable() {
+                            /**
+                             * Show the camera preview again, and reset the flash view to white
+                             */
+                            @Override
+                            public void run() {
+                                mFlashView.setVisibility(View.GONE);
+                                mFlashView.setBackgroundColor(getResources().getColor(android.R.color.white));
+                            }
+                        });
+                    }
+                }, 500);
+            }
 
             /* Get a file to write the picture to */
             File pictureFile = getOutputImageFile();
@@ -161,14 +185,6 @@ public class CameraActivity extends AppCompatActivity {
             } catch (IOException e) {
                 /* Eat it */
             }
-
-            /* Restart the preview later */
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    mCamera.startPreview();
-                }
-            }, 1000);
         }
     };
 
