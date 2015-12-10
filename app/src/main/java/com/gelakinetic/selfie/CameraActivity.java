@@ -54,7 +54,13 @@ public class CameraActivity extends AppCompatActivity {
     private View mControlsView;
 
     /* State objects */
-    private boolean mControlsVisible;
+    public enum ViewState {
+        VISIBLE,
+        IN_TRANSITION,
+        GONE
+    }
+    private ViewState mSystemBarVisible;
+    private ViewState mControlsVisible;
     private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
     private String mFlashMode = Camera.Parameters.FLASH_MODE_OFF;
     private boolean mHardwareFlashSupported = false;
@@ -99,6 +105,7 @@ public class CameraActivity extends AppCompatActivity {
                     | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                     | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+            mSystemBarVisible = ViewState.GONE;
         }
     };
 
@@ -112,6 +119,22 @@ public class CameraActivity extends AppCompatActivity {
             mControlsView.setVisibility(View.VISIBLE);
             Animation flyInAnimation = AnimationUtils.loadAnimation(getApplicationContext(),
                     R.anim.animation_fly_in);
+            flyInAnimation.setAnimationListener(new Animation.AnimationListener() {
+                @Override
+                public void onAnimationStart(Animation animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animation animation) {
+                    mControlsVisible = ViewState.VISIBLE;
+                }
+
+                @Override
+                public void onAnimationRepeat(Animation animation) {
+
+                }
+            });
             mControlsView.startAnimation(flyInAnimation);
         }
     };
@@ -329,7 +352,8 @@ public class CameraActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_camera);
 
-        mControlsVisible = true;
+        mControlsVisible = ViewState.VISIBLE;
+        mSystemBarVisible = ViewState.VISIBLE;
         mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = (FrameLayout) findViewById(R.id.fullscreen_content);
         mFlashView = (FrameLayout) findViewById(R.id.flash_view);
@@ -572,10 +596,12 @@ public class CameraActivity extends AppCompatActivity {
      * TODO
      */
     private void toggle() {
-        if (mControlsVisible) {
-            hide();
-        } else {
-            show();
+        if(mControlsVisible != ViewState.IN_TRANSITION && mSystemBarVisible != ViewState.IN_TRANSITION) {
+            if (mControlsVisible == ViewState.VISIBLE && mSystemBarVisible == ViewState.VISIBLE) {
+                hide();
+            } else if (mControlsVisible == ViewState.GONE && mSystemBarVisible == ViewState.GONE ) {
+                show();
+            }
         }
     }
 
@@ -583,10 +609,10 @@ public class CameraActivity extends AppCompatActivity {
      * TODO
      */
     private void hide() {
-        mControlsVisible = false;
+        mControlsVisible = ViewState.IN_TRANSITION;
+        mSystemBarVisible = ViewState.IN_TRANSITION;
 
         /* Hide UI first */
-
         Animation flyInAnimation = AnimationUtils.loadAnimation(this, R.anim.animation_fly_out);
         flyInAnimation.setAnimationListener(new Animation.AnimationListener() {
             @Override
@@ -601,6 +627,7 @@ public class CameraActivity extends AppCompatActivity {
             @Override
             public void onAnimationEnd(Animation animation) {
                 mControlsView.setVisibility(View.GONE);
+                mControlsVisible = ViewState.GONE;
             }
 
             @Override
@@ -631,10 +658,13 @@ public class CameraActivity extends AppCompatActivity {
      */
     @SuppressLint("InlinedApi")
     private void show() {
+        mSystemBarVisible = ViewState.IN_TRANSITION;
+        mControlsVisible = ViewState.IN_TRANSITION;
+
         /* Show the system bar */
         mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        mControlsVisible = true;
+        mSystemBarVisible = ViewState.VISIBLE;
 
         /* Schedule a runnable to display UI elements after a delay */
         mHandler.removeCallbacks(mHidePart2Runnable);
