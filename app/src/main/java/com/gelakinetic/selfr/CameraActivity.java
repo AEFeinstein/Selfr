@@ -59,6 +59,7 @@ public class CameraActivity extends AppCompatActivity {
         IN_TRANSITION,
         GONE
     }
+
     private ViewState mSystemBarVisible;
     private ViewState mControlsVisible;
     private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
@@ -94,11 +95,11 @@ public class CameraActivity extends AppCompatActivity {
         @SuppressLint("InlinedApi")
         @Override
         public void run() {
-            /* Delayed removal of status and navigation bar
-             * Note that some of these constants are new as of API 16 (Jelly Bean)
-             * and API 19 (KitKat). It is safe to use them, as they are inlined
-             * at compile-time and do nothing on earlier devices.
-             */
+          /* Delayed removal of status and navigation bar
+           * Note that some of these constants are new as of API 16 (Jelly Bean)
+           * and API 19 (KitKat). It is safe to use them, as they are inlined
+           * at compile-time and do nothing on earlier devices.
+           */
             mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE
                     | View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -175,7 +176,7 @@ public class CameraActivity extends AppCompatActivity {
         @Override
         public void run() {
             try {
-                if(mCamera == null) {
+                if (mCamera == null) {
                     return;
                 }
                 mCamera.takePicture(null, null, mPicture);
@@ -197,7 +198,7 @@ public class CameraActivity extends AppCompatActivity {
     private final Runnable mSwitchCameraRunnable = new Runnable() {
         @Override
         public void run() {
-            if(mCamera != null) {
+            if (mCamera != null) {
                 mCamera.stopPreview();
                 mCamera.release();
             }
@@ -213,7 +214,7 @@ public class CameraActivity extends AppCompatActivity {
     private final Runnable mShowCameraPreviewRunnable = new Runnable() {
         @Override
         public void run() {
-            if(mCamera != null) {
+            if (mCamera != null) {
                 mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
                 mContentView.addView(mCameraPreview);
 
@@ -261,7 +262,6 @@ public class CameraActivity extends AppCompatActivity {
          */
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
-
             /* Clear the flash screen, if there is no hardware flash
              * and the front facing camera was used
              */
@@ -287,7 +287,8 @@ public class CameraActivity extends AppCompatActivity {
                 fos.close();
 
                 /* Notify the media scanner so it displays in teh gallery */
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
+                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
+                        Uri.fromFile(pictureFile)));
             } catch (IOException e) {
                 /* Eat it */
             }
@@ -400,7 +401,8 @@ public class CameraActivity extends AppCompatActivity {
                 != PackageManager.PERMISSION_GRANTED) {
             requestedPermissions.add(Manifest.permission.CAMERA);
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             requestedPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }
@@ -469,17 +471,20 @@ public class CameraActivity extends AppCompatActivity {
 
             /* Set up the camera */
             mCamera = getCameraInstance(mCameraType);
-            if(mCamera != null) {
-                mCameraPreview = new CameraPreview(this, mCamera); // todo null checks for this guy
+            if (mCamera != null) {
+                mCameraPreview = new CameraPreview(this,
+                        mCamera); // todo null checks for this guy
                 mContentView.addView(mCameraPreview);
             }
 
             /* Register the headset state receiver */
             mHeadsetStateReceiver = new HeadsetStateReceiver();
-            registerReceiver(mHeadsetStateReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
+            registerReceiver(mHeadsetStateReceiver,
+                    new IntentFilter(Intent.ACTION_HEADSET_PLUG));
 
             /* Set up the accelerometer */
-            mOrientationEventListener = new OrientationEventListener(CameraActivity.this, SensorManager.SENSOR_DELAY_NORMAL) {
+            mOrientationEventListener = new OrientationEventListener(CameraActivity.this,
+                    SensorManager.SENSOR_DELAY_NORMAL) {
                 /**
                  * TODO
                  * @param orientation
@@ -576,7 +581,8 @@ public class CameraActivity extends AppCompatActivity {
      * @param grantResults
      */
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String[] permissions, @NonNull int[] grantResults) {
         boolean allPermissionsGranted = true;
         if (requestCode == PERMISSION_REQUEST_CODE) {
             for (int i = 0; i < grantResults.length; i++) {
@@ -596,7 +602,8 @@ public class CameraActivity extends AppCompatActivity {
             }
         }
         if (!allPermissionsGranted) {
-            Toast.makeText(this, getString(R.string.permission_failure), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.permission_failure),
+                    Toast.LENGTH_LONG).show();
             this.finish();
         }
     }
@@ -605,10 +612,13 @@ public class CameraActivity extends AppCompatActivity {
      * TODO
      */
     private void toggle() {
-        if(mControlsVisible != ViewState.IN_TRANSITION && mSystemBarVisible != ViewState.IN_TRANSITION) {
-            if (mControlsVisible == ViewState.VISIBLE && mSystemBarVisible == ViewState.VISIBLE) {
+        if (mControlsVisible != ViewState.IN_TRANSITION
+                && mSystemBarVisible != ViewState.IN_TRANSITION) {
+            if (mControlsVisible == ViewState.VISIBLE
+                    && mSystemBarVisible == ViewState.VISIBLE) {
                 hide();
-            } else if (mControlsVisible == ViewState.GONE && mSystemBarVisible == ViewState.GONE ) {
+            } else if (mControlsVisible == ViewState.GONE
+                    && mSystemBarVisible == ViewState.GONE) {
                 show();
             }
         }
@@ -622,7 +632,8 @@ public class CameraActivity extends AppCompatActivity {
         mSystemBarVisible = ViewState.IN_TRANSITION;
 
         /* Hide UI first */
-        Animation flyInAnimation = AnimationUtils.loadAnimation(this, R.anim.animation_fly_out);
+        Animation flyInAnimation = AnimationUtils.loadAnimation(this,
+                R.anim.animation_fly_out);
         flyInAnimation.setAnimationListener(new Animation.AnimationListener() {
             @Override
             public void onAnimationStart(Animation animation) {
@@ -756,7 +767,7 @@ public class CameraActivity extends AppCompatActivity {
      * @param item
      */
     private void switchCamera(MenuItem item) {
-         /* Switch from one camera type to the other, adjust the icon as necessary */
+        /* Switch from one camera type to the other, adjust the icon as necessary */
         switch (mCameraType) {
             case Camera.CameraInfo.CAMERA_FACING_FRONT: {
                 mCameraType = Camera.CameraInfo.CAMERA_FACING_BACK;
@@ -771,7 +782,7 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         /* Remove old camera & preview */
-        if(mCameraPreview != null) {
+        if (mCameraPreview != null) {
             mContentView.removeView(mCameraPreview);
         }
 
@@ -803,7 +814,8 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         /* Create a media file name */
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss",
+                Locale.getDefault()).format(new Date());
         return new File(mediaStorageDir.getPath() + File.separator +
                 "IMG_" + timeStamp + ".jpg");
     }
@@ -812,7 +824,7 @@ public class CameraActivity extends AppCompatActivity {
      * TODO
      */
     private void setFlashParameter() {
-        if(mCamera == null) {
+        if (mCamera == null) {
             return;
         }
         /* If the camera supports flash, set the parameter */
