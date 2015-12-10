@@ -1,4 +1,4 @@
-package com.gelakinetic.selfie;
+package com.gelakinetic.selfr;
 
 import android.content.Context;
 import android.hardware.Camera;

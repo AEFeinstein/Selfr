@@ -1,4 +1,4 @@
-package com.gelakinetic.selfie;
+package com.gelakinetic.selfr;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
