@@ -175,6 +175,9 @@ public class CameraActivity extends AppCompatActivity {
         @Override
         public void run() {
             try {
+                if(mCamera == null) {
+                    return;
+                }
                 mCamera.takePicture(null, null, mPicture);
                 mDebounce = true;
                 mHandler.postDelayed(mClearDebounceRunnable, 3000);
@@ -194,13 +197,15 @@ public class CameraActivity extends AppCompatActivity {
     private final Runnable mSwitchCameraRunnable = new Runnable() {
         @Override
         public void run() {
-            mCamera.stopPreview();
-            mCamera.release();
+            if(mCamera != null) {
+                mCamera.stopPreview();
+                mCamera.release();
+            }
 
-                /* Make a new camera & preview */
+            /* Make a new camera & preview */
             mCamera = getCameraInstance(mCameraType);
 
-                /* When it's done, set the UI on the UI thread */
+            /* When it's done, set the UI on the UI thread */
             runOnUiThread(mShowCameraPreviewRunnable);
         }
     };
@@ -208,11 +213,13 @@ public class CameraActivity extends AppCompatActivity {
     private final Runnable mShowCameraPreviewRunnable = new Runnable() {
         @Override
         public void run() {
-            mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
-            mContentView.addView(mCameraPreview);
+            if(mCamera != null) {
+                mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
+                mContentView.addView(mCameraPreview);
 
-            /* Make sure the flash parameter is correct */
-            setFlashParameter();
+                /* Make sure the flash parameter is correct */
+                setFlashParameter();
+            }
         }
     };
 
@@ -462,8 +469,10 @@ public class CameraActivity extends AppCompatActivity {
 
             /* Set up the camera */
             mCamera = getCameraInstance(mCameraType);
-            mCameraPreview = new CameraPreview(this, mCamera);
-            mContentView.addView(mCameraPreview);
+            if(mCamera != null) {
+                mCameraPreview = new CameraPreview(this, mCamera); // todo null checks for this guy
+                mContentView.addView(mCameraPreview);
+            }
 
             /* Register the headset state receiver */
             mHeadsetStateReceiver = new HeadsetStateReceiver();
@@ -762,7 +771,9 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         /* Remove old camera & preview */
-        mContentView.removeView(mCameraPreview);
+        if(mCameraPreview != null) {
+            mContentView.removeView(mCameraPreview);
+        }
 
         /* Getting a camera instance can take time, so do it on a background thread */
         new Thread(mSwitchCameraRunnable).start();
@@ -801,6 +812,9 @@ public class CameraActivity extends AppCompatActivity {
      * TODO
      */
     private void setFlashParameter() {
+        if(mCamera == null) {
+            return;
+        }
         /* If the camera supports flash, set the parameter */
         Camera.Parameters parameters = mCamera.getParameters();
         List<String> flashModes = parameters.getSupportedFlashModes();

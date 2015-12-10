@@ -5,6 +5,8 @@ import android.hardware.Camera;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -24,7 +26,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         super(context);
     }
 
-    public CameraPreview(Context context, Camera camera) {
+    public CameraPreview(Context context, @NotNull Camera camera) {
         super(context);
         mCamera = camera;
 
