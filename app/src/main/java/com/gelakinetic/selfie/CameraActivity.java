@@ -116,6 +116,112 @@ public class CameraActivity extends AppCompatActivity {
         }
     };
 
+    private final Runnable mSetFrontFlashRunnable = new Runnable() {
+        @Override
+        public void run() {
+            /* Save the old brightness, set current to max */
+            WindowManager.LayoutParams layout = getWindow().getAttributes();
+            mOldBrightness = layout.screenBrightness;
+            layout.screenBrightness = 1F;
+            getWindow().setAttributes(layout);
+            /* Show the "flash" screen */
+            mFlashView.setVisibility(View.VISIBLE);
+            /* Take a picture, after letting the "flash" settle */
+            mHandler.postDelayed(mTakePictureRunnable, 2000);
+        }
+    };
+
+    private final Runnable mClearFrontFlashRunnable = new Runnable() {
+        @Override
+        public void run() {
+            /* Restore the brightness */
+            WindowManager.LayoutParams layout = getWindow().getAttributes();
+            layout.screenBrightness = mOldBrightness;
+            getWindow().setAttributes(layout);
+
+            /* Hide the "flash" view */
+            mFlashView.setVisibility(View.GONE);
+        }
+    };
+
+
+    private final Runnable mTakePictureRunnable = new Runnable() {
+        /**
+         * TODO
+         */
+        @Override
+        public void run() {
+            try {
+                mCamera.takePicture(null, null, mPicture);
+                mDebounce = true;
+                mHandler.postDelayed(mClearDebounceRunnable, 3000);
+            } catch (RuntimeException e) {
+                /* That didn't work... */
+            }
+        }
+    };
+
+    private final Runnable mClearDebounceRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mDebounce = false;
+        }
+    };
+
+    private final Runnable mSwitchCameraRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mCamera.stopPreview();
+            mCamera.release();
+
+                /* Make a new camera & preview */
+            mCamera = getCameraInstance(mCameraType);
+
+                /* When it's done, set the UI on the UI thread */
+            runOnUiThread(mShowCameraPreviewRunnable);
+        }
+    };
+
+    private final Runnable mShowCameraPreviewRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
+            mContentView.addView(mCameraPreview);
+
+            /* Make sure the flash parameter is correct */
+            setFlashParameter();
+        }
+    };
+
+    private final Runnable mSetFrontShutterRunnable = new Runnable() {
+        /**
+         * Blackout the screen, like a shutter snap
+         */
+        @Override
+        public void run() {
+            mFlashView.setBackgroundColor(getResources().getColor(android.R.color.black));
+            mFlashView.setVisibility(View.VISIBLE);
+        }
+    };
+
+    private final Runnable mClearFrontShutterRunnable = new Runnable() {
+        @Override
+        public void run() {
+            runOnUiThread(mClearFrontShutterOnUiThreadRunnable);
+        }
+    };
+
+    private final Runnable mClearFrontShutterOnUiThreadRunnable = new Runnable() {
+        /**
+         * Show the camera preview again, and reset the flash view to white
+         */
+        @Override
+        public void run() {
+            mFlashView.setVisibility(View.GONE);
+            mFlashView.setBackgroundColor(getResources().getColor(android.R.color.white));
+        }
+    };
+
     private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
 
         /**
@@ -132,45 +238,10 @@ public class CameraActivity extends AppCompatActivity {
             if (!mHardwareFlashSupported &&
                     mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
                     mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        /* Restore the brightness */
-                        WindowManager.LayoutParams layout = getWindow().getAttributes();
-                        layout.screenBrightness = mOldBrightness;
-                        getWindow().setAttributes(layout);
-
-                        /* Hide the "flash" view */
-                        mFlashView.setVisibility(View.GONE);
-                    }
-                });
-            }
-            else {
-                runOnUiThread(new Runnable() {
-                    /**
-                     * Blackout the screen, like a shutter snap
-                     */
-                    @Override
-                    public void run() {
-                        mFlashView.setBackgroundColor(getResources().getColor(android.R.color.black));
-                        mFlashView.setVisibility(View.VISIBLE);
-                    }
-                });
-                mHandler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        runOnUiThread(new Runnable() {
-                            /**
-                             * Show the camera preview again, and reset the flash view to white
-                             */
-                            @Override
-                            public void run() {
-                                mFlashView.setVisibility(View.GONE);
-                                mFlashView.setBackgroundColor(getResources().getColor(android.R.color.white));
-                            }
-                        });
-                    }
-                }, 500);
+                runOnUiThread(mClearFrontFlashRunnable);
+            } else {
+                runOnUiThread(mSetFrontShutterRunnable);
+                mHandler.postDelayed(mClearFrontShutterRunnable, 500);
             }
 
             /* Get a file to write the picture to */
@@ -189,27 +260,6 @@ public class CameraActivity extends AppCompatActivity {
                 sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(pictureFile)));
             } catch (IOException e) {
                 /* Eat it */
-            }
-        }
-    };
-
-    private Runnable takePictureRunnable = new Runnable() {
-        /**
-         * TODO
-         */
-        @Override
-        public void run() {
-            try {
-                mCamera.takePicture(null, null, mPicture);
-                mDebounce = true;
-                mHandler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        mDebounce = false;
-                    }
-                }, 3000);
-            } catch (RuntimeException e) {
-                /* That didn't work... */
             }
         }
     };
@@ -361,23 +411,10 @@ public class CameraActivity extends AppCompatActivity {
                                     mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
                                     mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
                                 /* No hardware flash & front camera, draw the screen bright white */
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        /* Save the old brightness, set current to max */
-                                        WindowManager.LayoutParams layout = getWindow().getAttributes();
-                                        mOldBrightness = layout.screenBrightness;
-                                        layout.screenBrightness = 1F;
-                                        getWindow().setAttributes(layout);
-                                        /* Show the "flash" screen */
-                                        mFlashView.setVisibility(View.VISIBLE);
-                                        /* Take a picture, after letting the "flash" settle */
-                                        mHandler.postDelayed(takePictureRunnable, 2000);
-                                    }
-                                });
+                                runOnUiThread(mSetFrontFlashRunnable);
                             } else {
                                 /* Take a picture immediately */
-                                takePictureRunnable.run();
+                                mTakePictureRunnable.run();
                             }
                         }
                     }
@@ -650,6 +687,7 @@ public class CameraActivity extends AppCompatActivity {
 
     /**
      * TODO
+     *
      * @param item
      */
     private void switchFlash(MenuItem item) {
@@ -675,6 +713,7 @@ public class CameraActivity extends AppCompatActivity {
 
     /**
      * TODO
+     *
      * @param item
      */
     private void switchCamera(MenuItem item) {
@@ -696,28 +735,7 @@ public class CameraActivity extends AppCompatActivity {
         mContentView.removeView(mCameraPreview);
 
         /* Getting a camera instance can take time, so do it on a background thread */
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                mCamera.stopPreview();
-                mCamera.release();
-
-                /* Make a new camera & preview */
-                mCamera = getCameraInstance(mCameraType);
-
-                /* When it's done, set the UI on the UI thread */
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
-                        mContentView.addView(mCameraPreview);
-
-                        /* Make sure the flash parameter is correct */
-                        setFlashParameter();
-                    }
-                });
-            }
-        }).start();
+        new Thread(mSwitchCameraRunnable).start();
 
         /* Hide the UI */
         delayedHide(2500);
