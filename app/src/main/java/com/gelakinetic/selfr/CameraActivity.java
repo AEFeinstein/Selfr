@@ -78,7 +78,7 @@ public class CameraActivity extends AppCompatActivity {
 
     /* Handler and Runnables */
     private Handler mHandler;
-    private final Runnable mHideRunnable = new Runnable() {
+    private final Runnable mHideAllRunnable = new Runnable() {
         /**
          * TODO
          */
@@ -88,7 +88,7 @@ public class CameraActivity extends AppCompatActivity {
         }
     };
 
-    private final Runnable mHidePart2Runnable = new Runnable() {
+    private final Runnable mHideSystemBarRunnable = new Runnable() {
         /**
          * TODO
          */
@@ -123,7 +123,7 @@ public class CameraActivity extends AppCompatActivity {
             flyInAnimation.setAnimationListener(new Animation.AnimationListener() {
                 @Override
                 public void onAnimationStart(Animation animation) {
-
+                    /* Unused */
                 }
 
                 @Override
@@ -133,7 +133,7 @@ public class CameraActivity extends AppCompatActivity {
 
                 @Override
                 public void onAnimationRepeat(Animation animation) {
-
+                    /* Unused */
                 }
             });
             mControlsView.startAnimation(flyInAnimation);
@@ -141,6 +141,9 @@ public class CameraActivity extends AppCompatActivity {
     };
 
     private final Runnable mSetFrontFlashRunnable = new Runnable() {
+        /**
+         * TODO
+         */
         @Override
         public void run() {
             /* Save the old brightness, set current to max */
@@ -156,6 +159,9 @@ public class CameraActivity extends AppCompatActivity {
     };
 
     private final Runnable mClearFrontFlashRunnable = new Runnable() {
+        /**
+         * TODO
+         */
         @Override
         public void run() {
             /* Restore the brightness */
@@ -167,7 +173,6 @@ public class CameraActivity extends AppCompatActivity {
             mFlashView.setVisibility(View.GONE);
         }
     };
-
 
     private final Runnable mTakePictureRunnable = new Runnable() {
         /**
@@ -189,38 +194,12 @@ public class CameraActivity extends AppCompatActivity {
     };
 
     private final Runnable mClearDebounceRunnable = new Runnable() {
+        /**
+         * TODO
+         */
         @Override
         public void run() {
             mDebounce = false;
-        }
-    };
-
-    private final Runnable mSwitchCameraRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (mCamera != null) {
-                mCamera.stopPreview();
-                mCamera.release();
-            }
-
-            /* Make a new camera & preview */
-            mCamera = getCameraInstance(mCameraType);
-
-            /* When it's done, set the UI on the UI thread */
-            runOnUiThread(mShowCameraPreviewRunnable);
-        }
-    };
-
-    private final Runnable mShowCameraPreviewRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (mCamera != null) {
-                mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
-                mContentView.addView(mCameraPreview);
-
-                /* Make sure the flash parameter is correct */
-                setFlashParameter();
-            }
         }
     };
 
@@ -236,15 +215,8 @@ public class CameraActivity extends AppCompatActivity {
     };
 
     private final Runnable mClearFrontShutterRunnable = new Runnable() {
-        @Override
-        public void run() {
-            runOnUiThread(mClearFrontShutterOnUiThreadRunnable);
-        }
-    };
-
-    private final Runnable mClearFrontShutterOnUiThreadRunnable = new Runnable() {
         /**
-         * Show the camera preview again, and reset the flash view to white
+         * TODO
          */
         @Override
         public void run() {
@@ -659,7 +631,7 @@ public class CameraActivity extends AppCompatActivity {
 
         /* Schedule a runnable to remove the status and navigation bar after a delay */
         mHandler.removeCallbacks(mShowRunnable);
-        mHandler.postDelayed(mHidePart2Runnable, UI_ANIMATION_DELAY);
+        mHandler.postDelayed(mHideSystemBarRunnable, UI_ANIMATION_DELAY);
     }
 
     /**
@@ -669,8 +641,8 @@ public class CameraActivity extends AppCompatActivity {
      * @param delayMillis How long to delay before hiding the UI
      */
     private void delayedHide(int delayMillis) {
-        mHandler.removeCallbacks(mHideRunnable);
-        mHandler.postDelayed(mHideRunnable, delayMillis);
+        mHandler.removeCallbacks(mHideAllRunnable);
+        mHandler.postDelayed(mHideAllRunnable, delayMillis);
     }
 
     /**
@@ -687,7 +659,7 @@ public class CameraActivity extends AppCompatActivity {
         mSystemBarVisible = ViewState.VISIBLE;
 
         /* Schedule a runnable to display UI elements after a delay */
-        mHandler.removeCallbacks(mHidePart2Runnable);
+        mHandler.removeCallbacks(mHideSystemBarRunnable);
         mHandler.postDelayed(mShowRunnable, UI_ANIMATION_DELAY);
 
         /* Hide the UI in 5 seconds, should be enough for a button press */
@@ -787,7 +759,23 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         /* Getting a camera instance can take time, so do it on a background thread */
-        new Thread(mSwitchCameraRunnable).start();
+        if (mCamera != null) {
+            mCamera.stopPreview();
+            mCamera.release();
+            mCamera = null;
+        }
+
+        /* Make a new camera & preview */
+        mCamera = getCameraInstance(mCameraType);
+
+        /* When it's done, set the UI on the UI thread */
+        if (mCamera != null) {
+            mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
+            mContentView.addView(mCameraPreview);
+
+            /* Make sure the flash parameter is correct */
+            setFlashParameter();
+        }
 
         /* Hide the UI */
         delayedHide(2500);
