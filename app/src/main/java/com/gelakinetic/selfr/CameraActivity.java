@@ -174,6 +174,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
             /* Show the "flash" screen */
             mFlashView.setVisibility(View.VISIBLE);
             /* Take a picture, after letting the "flash" settle */
+            mHandler.removeCallbacks(mTakePictureRunnable);
             mHandler.postDelayed(mTakePictureRunnable, 2000);
         }
     };
@@ -208,6 +209,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                 }
                 mCamera.takePicture(null, null, mPicture);
                 mDebounce = true;
+                mHandler.removeCallbacks(mClearDebounceRunnable);
                 mHandler.postDelayed(mClearDebounceRunnable, 3000);
             } catch (RuntimeException e) {
                 /* That didn't work... */
@@ -265,6 +267,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
             } else {
                 /* Otherwise, make a shutter effect */
                 runOnUiThread(mSetFrontShutterRunnable);
+                mHandler.removeCallbacks(mClearFrontShutterRunnable);
                 mHandler.postDelayed(mClearFrontShutterRunnable, 500);
             }
 
@@ -637,6 +640,8 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
 
         /* Schedule a runnable to remove the status and navigation bar after a delay */
         mHandler.removeCallbacks(mShowControlsRunnable);
+        mHandler.removeCallbacks(mHideSystemBarRunnable);
+        mHandler.removeCallbacks(mHideAllRunnable);
         mHandler.postDelayed(mHideSystemBarRunnable, UI_ANIMATION_DELAY);
     }
 
@@ -647,6 +652,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
      * @param delayMillis How long to delay before hiding the UI
      */
     private void delayedHide(int delayMillis) {
+        mHandler.removeCallbacks(mHideSystemBarRunnable);
         mHandler.removeCallbacks(mHideAllRunnable);
         mHandler.postDelayed(mHideAllRunnable, delayMillis);
     }
@@ -667,6 +673,8 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
 
         /* Schedule a runnable to display UI elements after a delay */
         mHandler.removeCallbacks(mHideSystemBarRunnable);
+        mHandler.removeCallbacks(mHideAllRunnable);
+        mHandler.removeCallbacks(mShowControlsRunnable);
         mHandler.postDelayed(mShowControlsRunnable, UI_ANIMATION_DELAY);
 
         /* Hide the UI in 5 seconds, should be enough for a button press */
