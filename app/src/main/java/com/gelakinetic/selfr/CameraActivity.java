@@ -55,6 +55,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 
@@ -94,6 +95,8 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     private AudioCapturer mAudioCapturer;
     private Camera mCamera;
     private OrientationEventListener mOrientationEventListener;
+    private static final int PEAK_HISTORY_LEN = 3;
+    private LinkedList<Short> mPeakHistory = new LinkedList<>();
 
     /* Handler and Runnables */
     private Handler mHandler;
@@ -210,7 +213,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                 mCamera.takePicture(null, null, mPicture);
                 mDebounce = true;
                 mHandler.removeCallbacks(mClearDebounceRunnable);
-                mHandler.postDelayed(mClearDebounceRunnable, 3000);
+                mHandler.postDelayed(mClearDebounceRunnable, PEAK_HISTORY_LEN * 1000);
             } catch (RuntimeException e) {
                 /* That didn't work... */
             }
@@ -873,8 +876,26 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         if (mDebounce) {
             return;
         }
-        /* If there is a spike in the buffer */
-        if (findMax(tempBuf) > 32000) {
+
+        boolean buttonPressed = false;
+
+        /* If we've collected a full history */
+        if(mPeakHistory.size() == PEAK_HISTORY_LEN) {
+            /* Compute the average of historical peaks */
+            int average = 0;
+            for(Short s : mPeakHistory) {
+                average += s;
+            }
+            average /= mPeakHistory.size();
+
+            /* Compare the average of historical peaks to the current peak */
+            if(findMax(tempBuf) > 3 * average) {
+                buttonPressed = true;
+            }
+        }
+
+        /* If a button press was detected */
+        if (buttonPressed) {
             /* And the camera isn't null */
             if (mCamera != null) {
                 /* Set rotation */
@@ -892,6 +913,14 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                     mTakePictureRunnable.run();
                 }
             }
+            /* Clear the history for the next peak detection */
+            mPeakHistory.clear();
+        } else {
+            /* If there wasn't a button press, add this peak to the sliding history */
+            if (mPeakHistory.size() == PEAK_HISTORY_LEN) {
+                mPeakHistory.remove();
+            }
+            mPeakHistory.add(findMax(tempBuf));
         }
     }
 
