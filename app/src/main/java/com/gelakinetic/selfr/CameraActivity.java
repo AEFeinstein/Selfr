@@ -1,9 +1,26 @@
+/**
+ * Copyright 2015 Adam Feinstein
+ * <p/>
+ * This file is part of Selfr.
+ * <p/>
+ * Selfr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * <p/>
+ * Selfr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * <p/>
+ * You should have received a copy of the GNU General Public License
+ * along with Selfr.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package com.gelakinetic.selfr;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
@@ -41,7 +58,14 @@ import java.util.List;
 import java.util.Locale;
 
 @SuppressWarnings("deprecation")
-public class CameraActivity extends AppCompatActivity {
+public class CameraActivity extends AppCompatActivity implements IAudioReceiver {
+
+    /* Enums */
+    public enum ViewState {
+        VISIBLE,
+        IN_TRANSITION,
+        GONE
+    }
 
     /* Constants */
     private static final int UI_ANIMATION_DELAY = 200;
@@ -52,14 +76,9 @@ public class CameraActivity extends AppCompatActivity {
     private FrameLayout mFlashView;
     private TextView mNoStickWarningView;
     private View mControlsView;
+    private CameraPreview mCameraPreview;
 
     /* State objects */
-    public enum ViewState {
-        VISIBLE,
-        IN_TRANSITION,
-        GONE
-    }
-
     private ViewState mSystemBarVisible;
     private ViewState mControlsVisible;
     private int mCameraType = Camera.CameraInfo.CAMERA_FACING_FRONT;
@@ -73,33 +92,30 @@ public class CameraActivity extends AppCompatActivity {
     private HeadsetStateReceiver mHeadsetStateReceiver;
     private AudioCapturer mAudioCapturer;
     private Camera mCamera;
-    private CameraPreview mCameraPreview;
     private OrientationEventListener mOrientationEventListener;
 
     /* Handler and Runnables */
     private Handler mHandler;
     private final Runnable mHideAllRunnable = new Runnable() {
         /**
-         * TODO
+         * Calls hide(), can be posted delayed with a handler
          */
         @Override
         public void run() {
-            hide();
+            hideControls();
         }
     };
 
     private final Runnable mHideSystemBarRunnable = new Runnable() {
         /**
-         * TODO
+         * Delayed removal of status and navigation bar
+         * Note that some of these constants are new as of API 16 (Jelly Bean)
+         * and API 19 (KitKat). It is safe to use them, as they are inlined
+         * at compile-time and do nothing on earlier devices.
          */
         @SuppressLint("InlinedApi")
         @Override
         public void run() {
-          /* Delayed removal of status and navigation bar
-           * Note that some of these constants are new as of API 16 (Jelly Bean)
-           * and API 19 (KitKat). It is safe to use them, as they are inlined
-           * at compile-time and do nothing on earlier devices.
-           */
             mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE
                     | View.SYSTEM_UI_FLAG_FULLSCREEN
                     | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -110,14 +126,15 @@ public class CameraActivity extends AppCompatActivity {
         }
     };
 
-    private final Runnable mShowRunnable = new Runnable() {
+    private final Runnable mShowControlsRunnable = new Runnable() {
         /**
-         * TODO
+         * Makes the controls visible again, and animates their entrance
          */
         @Override
         public void run() {
-            /* Delayed display of UI elements */
+            /* Show the controls view */
             mControlsView.setVisibility(View.VISIBLE);
+            /* Animate it's entrance */
             Animation flyInAnimation = AnimationUtils.loadAnimation(getApplicationContext(),
                     R.anim.animation_fly_in);
             flyInAnimation.setAnimationListener(new Animation.AnimationListener() {
@@ -128,6 +145,7 @@ public class CameraActivity extends AppCompatActivity {
 
                 @Override
                 public void onAnimationEnd(Animation animation) {
+                    /* Mark the controls as visible after the animation finishes */
                     mControlsVisible = ViewState.VISIBLE;
                 }
 
@@ -142,7 +160,8 @@ public class CameraActivity extends AppCompatActivity {
 
     private final Runnable mSetFrontFlashRunnable = new Runnable() {
         /**
-         * TODO
+         * Shows a maximum brightness, white "flash" view, waits two seconds
+         * for the screen and camera to adjust, and takes a picture
          */
         @Override
         public void run() {
@@ -160,7 +179,7 @@ public class CameraActivity extends AppCompatActivity {
 
     private final Runnable mClearFrontFlashRunnable = new Runnable() {
         /**
-         * TODO
+         * Restores the brightness and hides the white "flash" view
          */
         @Override
         public void run() {
@@ -176,11 +195,13 @@ public class CameraActivity extends AppCompatActivity {
 
     private final Runnable mTakePictureRunnable = new Runnable() {
         /**
-         * TODO
+         * Take a picture and set a timer to not allow another picture
+         * for three seconds
          */
         @Override
         public void run() {
             try {
+                /* Just to be sure */
                 if (mCamera == null) {
                     return;
                 }
@@ -195,7 +216,7 @@ public class CameraActivity extends AppCompatActivity {
 
     private final Runnable mClearDebounceRunnable = new Runnable() {
         /**
-         * TODO
+         * Clear the debounce timer, three seconds after a picture is taken
          */
         @Override
         public void run() {
@@ -216,7 +237,7 @@ public class CameraActivity extends AppCompatActivity {
 
     private final Runnable mClearFrontShutterRunnable = new Runnable() {
         /**
-         * TODO
+         * Clear the black, shutter view from the screen
          */
         @Override
         public void run() {
@@ -228,20 +249,20 @@ public class CameraActivity extends AppCompatActivity {
     private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
 
         /**
-         * TODO
-         * @param data
-         * @param camera
+         * Callback for after a picture was taken
+         * @param data      The bytes to be saved as an image
+         * @param camera    The Camera object that took the picture
          */
         @Override
         public void onPictureTaken(byte[] data, Camera camera) {
-            /* Clear the flash screen, if there is no hardware flash
-             * and the front facing camera was used
-             */
+            /* If there is no hardware flash and the front facing camera was used */
             if (!mHardwareFlashSupported &&
                     mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
                     mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
+                /* Clear the "flash" screen */
                 runOnUiThread(mClearFrontFlashRunnable);
             } else {
+                /* Otherwise, make a shutter effect */
                 runOnUiThread(mSetFrontShutterRunnable);
                 mHandler.postDelayed(mClearFrontShutterRunnable, 500);
             }
@@ -258,7 +279,7 @@ public class CameraActivity extends AppCompatActivity {
                 fos.write(data);
                 fos.close();
 
-                /* Notify the media scanner so it displays in teh gallery */
+                /* Notify the media scanner so it displays in the gallery */
                 sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
                         Uri.fromFile(pictureFile)));
             } catch (IOException e) {
@@ -270,7 +291,8 @@ public class CameraActivity extends AppCompatActivity {
     /**
      * A safe way to get an instance of the Camera object. Also sets up picture size & focus type
      *
-     * @param cameraType Camera.CameraInfo.CAMERA_FACING_FRONT or Camera.CameraInfo.CAMERA_FACING_BACK
+     * @param cameraType Camera.CameraInfo.CAMERA_FACING_FRONT or
+     *                   Camera.CameraInfo.CAMERA_FACING_BACK
      * @return A Camera object if it was created, or null
      */
     @Nullable
@@ -278,6 +300,7 @@ public class CameraActivity extends AppCompatActivity {
         Camera camera = null;
         try {
             Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
+            /* Scan through all the cameras for one of the specified type */
             for (int camIdx = 0; camIdx < Camera.getNumberOfCameras(); camIdx++) {
                 Camera.getCameraInfo(camIdx, cameraInfo);
                 if (cameraInfo.facing == cameraType) {
@@ -322,9 +345,11 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * Perform initialization of all non-camera views
      *
-     * @param savedInstanceState
+     * @param savedInstanceState If the activity is being re-initialized after previously being shut
+     *                           down then this Bundle contains the data it most recently supplied
+     *                           in onSaveInstanceState. Note: Otherwise it is null.
      */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -332,12 +357,13 @@ public class CameraActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_camera);
 
-        mControlsVisible = ViewState.VISIBLE;
-        mSystemBarVisible = ViewState.VISIBLE;
         mControlsView = findViewById(R.id.fullscreen_content_controls);
         mContentView = (FrameLayout) findViewById(R.id.fullscreen_content);
         mFlashView = (FrameLayout) findViewById(R.id.flash_view);
         mNoStickWarningView = (TextView) findViewById(R.id.no_stick_text);
+
+        mControlsVisible = ViewState.VISIBLE;
+        mSystemBarVisible = ViewState.VISIBLE;
 
         mHandler = new Handler();
 
@@ -345,10 +371,11 @@ public class CameraActivity extends AppCompatActivity {
         mContentView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                toggle();
+                toggleControls();
             }
         });
 
+        /* Set up the Toolbar */
         Toolbar mToolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(mToolbar);
         mToolbar.setOnClickListener(new View.OnClickListener() {
@@ -361,7 +388,11 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * When the activity resumes, request permissions, or if the app has them initialize:
+     * - audio capturer (to detect button presses)
+     * - camera (to take pictures)
+     * - headset state receiver (to detect the selfie stick)
+     * - accelerometer (to properly set picture rotation)
      */
     @Override
     protected void onResume() {
@@ -394,72 +425,32 @@ public class CameraActivity extends AppCompatActivity {
         } else {
             /* Otherwise, fire everything up */
             /* Set up the audio capture */
-            mAudioCapturer = AudioCapturer.getInstance(new IAudioReceiver() {
-                /**
-                 * TODO
-                 * @param tempBuf
-                 */
-                @Override
-                public void capturedAudioReceived(short[] tempBuf) {
-
-                    if (mDebounce) {
-                        return;
-                    }
-                    if (findMax(tempBuf) > 32000) {
-                        if (mCamera != null) {
-                            /* Set rotation */
-                            Camera.Parameters parameters = mCamera.getParameters();
-                            parameters.setRotation(mDeviceRotation);
-                            mCamera.setParameters(parameters);
-
-                            if (!mHardwareFlashSupported &&
-                                    mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
-                                    mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
-                                /* No hardware flash & front camera, draw the screen bright white */
-                                runOnUiThread(mSetFrontFlashRunnable);
-                            } else {
-                                /* Take a picture immediately */
-                                mTakePictureRunnable.run();
-                            }
-                        }
-                    }
-                }
-
-                /**
-                 * TODO
-                 * @param array
-                 * @return
-                 */
-                short findMax(short[] array) {
-                    short max = Short.MIN_VALUE;
-                    for (short element : array) {
-                        if (element > max) {
-                            max = element;
-                        }
-                    }
-                    return max;
-                }
-            });
+            mAudioCapturer = AudioCapturer.getInstance(this);
 
             /* Set up the camera */
             mCamera = getCameraInstance(mCameraType);
             if (mCamera != null) {
-                mCameraPreview = new CameraPreview(this,
-                        mCamera); // todo null checks for this guy
+                mCameraPreview = new CameraPreview(this, mCamera); // todo null checks for this guy
                 mContentView.addView(mCameraPreview);
             }
 
             /* Register the headset state receiver */
-            mHeadsetStateReceiver = new HeadsetStateReceiver();
-            registerReceiver(mHeadsetStateReceiver,
-                    new IntentFilter(Intent.ACTION_HEADSET_PLUG));
+            mHeadsetStateReceiver = new HeadsetStateReceiver(this);
+            registerReceiver(mHeadsetStateReceiver, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
 
             /* Set up the accelerometer */
             mOrientationEventListener = new OrientationEventListener(CameraActivity.this,
                     SensorManager.SENSOR_DELAY_NORMAL) {
+
                 /**
-                 * TODO
-                 * @param orientation
+                 * Called when the orientation of the device has changed. orientation parameter is
+                 * in degrees, ranging from 0 to 359. orientation is 0 degrees when the device is
+                 * oriented in its natural position, 90 degrees when its left side is at the top,
+                 * 180 degrees when it is upside down, and 270 degrees when its right side is to the
+                 * top. ORIENTATION_UNKNOWN is returned when the device is close to flat and the
+                 * orientation cannot be determined.
+                 *
+                 * @param orientation The orientation of the device. (0->359, ORIENTATION_UNKNOWN)
                  */
                 @Override
                 public void onOrientationChanged(int orientation) {
@@ -468,32 +459,29 @@ public class CameraActivity extends AppCompatActivity {
                         return;
                     }
 
-                    /* Clamp rotation to nearest 90 degree wedge */
-                    int rotation = 0;
+                    /* Clamp rotation to nearest 90 degree wedge, depending on camera */
                     Camera.CameraInfo info = new Camera.CameraInfo();
                     if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
                         if (315 <= orientation || orientation < 45) {
-                            rotation = 270;
+                            mDeviceRotation = 270;
                         } else if (45 <= orientation && orientation < 135) {
-                            rotation = 180;
+                            mDeviceRotation = 180;
                         } else if (135 <= orientation && orientation < 225) {
-                            rotation = 90;
+                            mDeviceRotation = 90;
                         } else if (225 <= orientation && orientation < 315) {
-                            rotation = 0;
+                            mDeviceRotation = 0;
                         }
                     } else {
                         if (315 <= orientation || orientation < 45) {
-                            rotation = 90;
+                            mDeviceRotation = 90;
                         } else if (45 <= orientation && orientation < 135) {
-                            rotation = 180;
+                            mDeviceRotation = 180;
                         } else if (135 <= orientation && orientation < 225) {
-                            rotation = 270;
+                            mDeviceRotation = 270;
                         } else if (225 <= orientation && orientation < 315) {
-                            rotation = 0;
+                            mDeviceRotation = 0;
                         }
                     }
-
-                    mDeviceRotation = rotation;
                 }
             };
             if (mOrientationEventListener.canDetectOrientation()) {
@@ -509,7 +497,7 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * Clean up and release all hardware resources when the activity pauses
      */
     @Override
     protected void onPause() {
@@ -546,15 +534,18 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * Callback for the result from requesting permissions. This method is invoked for every call
+     * on requestPermissions(String[], int). If permissions aren't granted, pop a toast & finish()
      *
-     * @param requestCode
-     * @param permissions
-     * @param grantResults
+     * @param requestCode  The request code passed in requestPermissions(String[], int).
+     * @param permissions  The requested permissions. Never null.
+     * @param grantResults The grant results for the corresponding permissions which is either
+     *                     android.content.pm.PackageManager.PERMISSION_GRANTED or
+     *                     android.content.pm.PackageManager.PERMISSION_DENIED. Never null.
      */
     @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
         boolean allPermissionsGranted = true;
         if (requestCode == PERMISSION_REQUEST_CODE) {
             for (int i = 0; i < grantResults.length; i++) {
@@ -581,25 +572,30 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * Toggle the visible state of the controls
      */
-    private void toggle() {
+    private void toggleControls() {
+        /* If there is no animation in progress */
         if (mControlsVisible != ViewState.IN_TRANSITION
                 && mSystemBarVisible != ViewState.IN_TRANSITION) {
+            /* If the controls are visible */
             if (mControlsVisible == ViewState.VISIBLE
                     && mSystemBarVisible == ViewState.VISIBLE) {
-                hide();
+                /* Hide them */
+                hideControls();
             } else if (mControlsVisible == ViewState.GONE
                     && mSystemBarVisible == ViewState.GONE) {
-                show();
+                /* Otherwise, show them */
+                showControls();
             }
         }
     }
 
     /**
-     * TODO
+     * Hide the system bar & toolbar
      */
-    private void hide() {
+    private void hideControls() {
+        /* Mark the views as animating */
         mControlsVisible = ViewState.IN_TRANSITION;
         mSystemBarVisible = ViewState.IN_TRANSITION;
 
@@ -630,7 +626,7 @@ public class CameraActivity extends AppCompatActivity {
         mControlsView.startAnimation(flyInAnimation);
 
         /* Schedule a runnable to remove the status and navigation bar after a delay */
-        mHandler.removeCallbacks(mShowRunnable);
+        mHandler.removeCallbacks(mShowControlsRunnable);
         mHandler.postDelayed(mHideSystemBarRunnable, UI_ANIMATION_DELAY);
     }
 
@@ -646,10 +642,11 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * Show the system bar & toolbar
      */
     @SuppressLint("InlinedApi")
-    private void show() {
+    private void showControls() {
+        /* Mark the views as animating */
         mSystemBarVisible = ViewState.IN_TRANSITION;
         mControlsVisible = ViewState.IN_TRANSITION;
 
@@ -660,17 +657,18 @@ public class CameraActivity extends AppCompatActivity {
 
         /* Schedule a runnable to display UI elements after a delay */
         mHandler.removeCallbacks(mHideSystemBarRunnable);
-        mHandler.postDelayed(mShowRunnable, UI_ANIMATION_DELAY);
+        mHandler.postDelayed(mShowControlsRunnable, UI_ANIMATION_DELAY);
 
         /* Hide the UI in 5 seconds, should be enough for a button press */
         delayedHide(5000);
     }
 
     /**
-     * TODO
+     * Initialize the contents of the Activity's standard options menu. The menu is inflated from
+     * R.menu.camera_menu
      *
-     * @param menu
-     * @return
+     * @param menu The options menu in which you place your items.
+     * @return true, since the menu should be displayed
      */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -680,40 +678,45 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * This hook is called whenever an item in your options menu is selected.
      *
-     * @param item
-     * @return
+     * @param item The menu item that was selected.
+     * @return false to allow normal menu processing to proceed, true to consume it here.
      */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.photo_library:
-                hide();
+                /* Launch an intent to open a gallery app */
                 Intent i = new Intent(Intent.ACTION_VIEW,
                         android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI);
                 startActivity(i);
                 return true;
             case R.id.camera_switch: {
+                /* Switch the camera between front and rear */
                 switchCamera(item);
                 return true;
             }
             case R.id.flash_setting: {
+                /* Switch the flash between on and off */
                 switchFlash(item);
                 return true;
             }
-            default:
+            default: {
+                /* Pass the event along */
                 return super.onOptionsItemSelected(item);
+            }
         }
     }
 
     /**
-     * TODO
+     * If the flash is on, turn it off, and vice versa. Front facing cameras without hardware
+     * flash will briefly display a max brighess, pure white screen
      *
-     * @param item
+     * @param item The menu item to change the icon in order to reflect the current state
      */
     private void switchFlash(MenuItem item) {
-        /* Change the flash mode */
+        /* Change the flash mode & icon */
         switch (mFlashMode) {
             case Camera.Parameters.FLASH_MODE_OFF: {
                 mFlashMode = Camera.Parameters.FLASH_MODE_ON;
@@ -734,9 +737,11 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO
+     * If the rear camera is being used, switch to the front camera, and vice versa
+     * This blocks the UI thread, which is generally bad, but nothing is happening anyway,
+     * and swapping camera resources on a separate thread is a recipe for crashes
      *
-     * @param item
+     * @param item The menu item to change the icon in order to reflect the current state
      */
     private void switchCamera(MenuItem item) {
         /* Switch from one camera type to the other, adjust the icon as necessary */
@@ -758,17 +763,17 @@ public class CameraActivity extends AppCompatActivity {
             mContentView.removeView(mCameraPreview);
         }
 
-        /* Getting a camera instance can take time, so do it on a background thread */
+        /* Release current camera resources */
         if (mCamera != null) {
             mCamera.stopPreview();
             mCamera.release();
             mCamera = null;
         }
 
-        /* Make a new camera & preview */
+        /* Get a new camera instance */
         mCamera = getCameraInstance(mCameraType);
 
-        /* When it's done, set the UI on the UI thread */
+        /* Set the preview with the new Camera object */
         if (mCamera != null) {
             mCameraPreview = new CameraPreview(getApplicationContext(), mCamera);
             mContentView.addView(mCameraPreview);
@@ -782,34 +787,7 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * Create a File for saving an image or video
-     */
-    @Nullable
-    private File getOutputImageFile() {
-        /* To be safe, you should check that the SDCard is mounted */
-        /* using Environment.getExternalStorageState() before doing this. */
-
-        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DCIM), getString(R.string.app_name));
-        /* This location works best if you want the created images to be shared */
-        /* between applications and persist after your app has been uninstalled. */
-
-        /* Create the storage directory if it does not exist */
-        if (!mediaStorageDir.exists()) {
-            if (!mediaStorageDir.mkdirs()) {
-                return null;
-            }
-        }
-
-        /* Create a media file name */
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss",
-                Locale.getDefault()).format(new Date());
-        return new File(mediaStorageDir.getPath() + File.separator +
-                "IMG_" + timeStamp + ".jpg");
-    }
-
-    /**
-     * TODO
+     * Sets the current flash mode to the current Camera object
      */
     private void setFlashParameter() {
         if (mCamera == null) {
@@ -820,7 +798,7 @@ public class CameraActivity extends AppCompatActivity {
         List<String> flashModes = parameters.getSupportedFlashModes();
         if (flashModes != null &&
                 flashModes.contains(Camera.Parameters.FLASH_MODE_OFF) &&
-                flashModes.contains(Camera.Parameters.FLASH_MODE_OFF)) {
+                flashModes.contains(Camera.Parameters.FLASH_MODE_ON)) {
             switch (mFlashMode) {
                 case Camera.Parameters.FLASH_MODE_OFF: {
                     parameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
@@ -838,24 +816,97 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
-    private class HeadsetStateReceiver extends BroadcastReceiver {
-        /**
-         * TODO
-         *
-         * @param context
-         * @param intent
-         */
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            int state = intent.getExtras().getInt("state");
-            int microphone = intent.getExtras().getInt("microphone");
-            if (state == 1 && microphone == 1) {
-                mNoStickWarningView.setVisibility(View.GONE);
-                mAudioCapturer.start();
-            } else {
-                mNoStickWarningView.setVisibility(View.VISIBLE);
-                mAudioCapturer.stop();
+    /**
+     * Create a File for saving an image
+     */
+    @Nullable
+    private File getOutputImageFile() {
+        /* Make sure the external storage is mounted first */
+        if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+            return null;
+        }
+
+        /* Make a Selfr folder in the DCIM directory */
+        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DCIM), getString(R.string.app_name));
+
+        /* Create the storage directory if it does not exist */
+        if (!mediaStorageDir.exists()) {
+            if (!mediaStorageDir.mkdirs()) {
+                /* Can't make the folder */
+                return null;
             }
+        }
+
+        /* Create a media file name */
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss",
+                Locale.getDefault()).format(new Date());
+        return new File(mediaStorageDir.getPath() + File.separator + "IMG_" + timeStamp + ".jpg");
+    }
+
+    /**
+     * Called from AudioCapturer when a buffer of audio was received
+     *
+     * @param tempBuf A buffer of audio received
+     */
+    @Override
+    public void capturedAudioReceived(short[] tempBuf) {
+
+        /* If the app just took a picture, and is debouncing, don't look for button presses */
+        if (mDebounce) {
+            return;
+        }
+        /* If there is a spike in the buffer */
+        if (findMax(tempBuf) > 32000) {
+            /* And the camera isn't null */
+            if (mCamera != null) {
+                /* Set rotation */
+                Camera.Parameters parameters = mCamera.getParameters();
+                parameters.setRotation(mDeviceRotation);
+                mCamera.setParameters(parameters);
+
+                if (!mHardwareFlashSupported &&
+                        mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
+                        mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
+                    /* No hardware flash & front camera, draw the screen bright white */
+                    runOnUiThread(mSetFrontFlashRunnable);
+                } else {
+                    /* Take a picture immediately */
+                    mTakePictureRunnable.run();
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper function to find the largest element in an array
+     *
+     * @param array An array to search
+     * @return The largest element in the given array
+     */
+    short findMax(short[] array) {
+        short max = Short.MIN_VALUE;
+        for (short element : array) {
+            if (element > max) {
+                max = element;
+            }
+        }
+        return max;
+    }
+
+    /**
+     * Called from HeadsetStateReceiver when a selfie stick is attached or removed.
+     * This is called when the activity is created too.
+     *
+     * @param selfieStickConnected true if a stick was connected, false if it was removed
+     */
+    public void setSelfieStickConnected(boolean selfieStickConnected) {
+        if (selfieStickConnected) {
+            mNoStickWarningView.setVisibility(View.GONE);
+            mAudioCapturer.start();
+        } else {
+            mNoStickWarningView.setVisibility(View.VISIBLE);
+            mAudioCapturer.stop();
         }
     }
 }
