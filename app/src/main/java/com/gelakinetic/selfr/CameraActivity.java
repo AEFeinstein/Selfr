@@ -263,10 +263,10 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                     mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT &&
                     mFlashMode.equals(Camera.Parameters.FLASH_MODE_ON)) {
                 /* Clear the "flash" screen */
-                runOnUiThread(mClearFrontFlashRunnable);
+                mClearFrontFlashRunnable.run();
             } else {
                 /* Otherwise, make a shutter effect */
-                runOnUiThread(mSetFrontShutterRunnable);
+                mSetFrontShutterRunnable.run();
                 mHandler.removeCallbacks(mClearFrontShutterRunnable);
                 mHandler.postDelayed(mClearFrontShutterRunnable, 500);
             }
@@ -473,8 +473,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                     }
 
                     /* Clamp rotation to nearest 90 degree wedge, depending on camera */
-                    Camera.CameraInfo info = new Camera.CameraInfo();
-                    if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                    if (mCameraType == Camera.CameraInfo.CAMERA_FACING_FRONT) {
                         if (315 <= orientation || orientation < 45) {
                             mDeviceRotation = 270;
                         } else if (45 <= orientation && orientation < 135) {
