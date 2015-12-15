@@ -27,4 +27,5 @@
     <string name="permission_failure">Can\'t take selfies without permission!</string>
     <string name="no_stick_warning">Please Attach Selfie Stick</string>
     <string name="about_message">GPLv3 Licensed, available on github, yada yada</string>
+    <string name="stick_error">ERROR: Try Reconnecting Stick</string>
 </resources>

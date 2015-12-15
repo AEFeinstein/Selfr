@@ -55,7 +55,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 
@@ -95,8 +94,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     private AudioCapturer mAudioCapturer;
     private Camera mCamera;
     private OrientationEventListener mOrientationEventListener;
-    private static final int PEAK_HISTORY_LEN = 3;
-    private LinkedList<Short> mPeakHistory = new LinkedList<>();
+    private EnvelopeDetector mEnvelopeDetector;
 
     /* Handler and Runnables */
     private Handler mHandler;
@@ -213,7 +211,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                 mCamera.takePicture(null, null, mPicture);
                 mDebounce = true;
                 mHandler.removeCallbacks(mClearDebounceRunnable);
-                mHandler.postDelayed(mClearDebounceRunnable, PEAK_HISTORY_LEN * 1000);
+                mHandler.postDelayed(mClearDebounceRunnable, 3000);
             } catch (RuntimeException e) {
                 /* That didn't work... */
             }
@@ -401,6 +399,8 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                 builder.create().show();
             }
         });
+
+        mEnvelopeDetector = new EnvelopeDetector();
     }
 
     /**
@@ -872,26 +872,19 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     @Override
     public void capturedAudioReceived(short[] tempBuf) {
 
+        /* Keep the envelope detector running, no matter what */
+        float outputs[] = new float[tempBuf.length + 1];
+        mEnvelopeDetector.findEnvelope(tempBuf, outputs);
+
         /* If the app just took a picture, and is debouncing, don't look for button presses */
         if (mDebounce) {
             return;
         }
 
+        /* Check to see if the average of the envelope crosses a threshold */
         boolean buttonPressed = false;
-
-        /* If we've collected a full history */
-        if(mPeakHistory.size() == PEAK_HISTORY_LEN) {
-            /* Compute the average of historical peaks */
-            int average = 0;
-            for(Short s : mPeakHistory) {
-                average += s;
-            }
-            average /= mPeakHistory.size();
-
-            /* Compare the average of historical peaks to the current peak */
-            if(findMax(tempBuf) > 3 * average) {
-                buttonPressed = true;
-            }
+        if(EnvelopeDetector.average(outputs) > 1000.0f) {
+            buttonPressed = true;
         }
 
         /* If a button press was detected */
@@ -913,31 +906,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                     mTakePictureRunnable.run();
                 }
             }
-            /* Clear the history for the next peak detection */
-            mPeakHistory.clear();
-        } else {
-            /* If there wasn't a button press, add this peak to the sliding history */
-            if (mPeakHistory.size() == PEAK_HISTORY_LEN) {
-                mPeakHistory.remove();
-            }
-            mPeakHistory.add(findMax(tempBuf));
         }
-    }
-
-    /**
-     * Helper function to find the largest element in an array
-     *
-     * @param array An array to search
-     * @return The largest element in the given array
-     */
-    short findMax(short[] array) {
-        short max = Short.MIN_VALUE;
-        for (short element : array) {
-            if (element > max) {
-                max = element;
-            }
-        }
-        return max;
     }
 
     /**
@@ -949,7 +918,9 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     public void setSelfieStickConnected(boolean selfieStickConnected) {
         if (selfieStickConnected) {
             mNoStickWarningView.setVisibility(View.GONE);
-            mAudioCapturer.start();
+            if(!mAudioCapturer.start()) {
+                Toast.makeText(this, getString(R.string.stick_error), Toast.LENGTH_LONG).show();
+            }
         } else {
             mNoStickWarningView.setVisibility(View.VISIBLE);
             mAudioCapturer.stop();

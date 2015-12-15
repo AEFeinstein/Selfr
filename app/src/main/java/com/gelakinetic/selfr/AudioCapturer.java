@@ -56,8 +56,10 @@ public class AudioCapturer implements Runnable {
 
     /**
      * Start recording audio and passing samples to the given iAudioReceiver
+     *
+     * @return true if the recording started, false otherwise
      */
-    public void start() {
+    public boolean start() {
 
         /* Figure out how big the buffer needs to be */
         int bufferSize = AudioRecord.getMinBufferSize(SAMPLES_PER_SECOND,
@@ -76,8 +78,10 @@ public class AudioCapturer implements Runnable {
                 isRecording = true;
                 thread = new Thread(this);
                 thread.start();
+                return true;
             }
         }
+        return false;
     }
 
     /**
