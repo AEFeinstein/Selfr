@@ -19,7 +19,7 @@
 
 package com.gelakinetic.selfr;
 
-public class EnvelopeDetector {
+class EnvelopeDetector {
 
     /* Filter coefficient */
     private static final float ALPHA = 0.5f;
@@ -28,7 +28,7 @@ public class EnvelopeDetector {
     private float mLastOutput = 0;
 
     /**
-     * Approximate the envelope of an imput signal by squaring it and running it through
+     * Approximate the envelope of an input signal by squaring it and running it through
      * a low pass filter
      *
      * @param samples Input, samples from the AudioCapturer

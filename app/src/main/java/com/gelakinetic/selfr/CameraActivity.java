@@ -20,7 +20,6 @@
 package com.gelakinetic.selfr;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -126,15 +125,19 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
          * and API 19 (KitKat). It is safe to use them, as they are inlined
          * at compile-time and do nothing on earlier devices.
          */
-        @SuppressLint("InlinedApi")
         @Override
         public void run() {
-            mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LOW_PROFILE
-                    | View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+            int flags = View.SYSTEM_UI_FLAG_LOW_PROFILE |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                flags |= View.SYSTEM_UI_FLAG_FULLSCREEN;
+                flags |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+                flags |= View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                flags |= View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            }
+            mContentView.setSystemUiVisibility(flags);
             mSystemBarVisible = ViewState.GONE;
         }
     };
@@ -261,7 +264,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         }
     };
 
-    private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
+    private final Camera.PictureCallback mPicture = new Camera.PictureCallback() {
 
         /**
          * Callback for after a picture was taken
@@ -312,7 +315,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
      * @return A Camera object if it was created, or null
      */
     @Nullable
-    public static Camera getCameraInstance(int cameraType) {
+    private static Camera getCameraInstance(int cameraType) {
         Camera camera = null;
         try {
             Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
@@ -339,7 +342,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                             parameters.setPictureSize(nativeSize.width, nativeSize.height);
                         }
 
-                        /* Set autofocus, if we can */
+                        /* Set auto-focus, if we can */
                         List<String> focusModes = parameters.getSupportedFocusModes();
                         if (focusModes != null &&
                                 focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
@@ -731,15 +734,17 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     /**
      * Show the system bar & toolbar
      */
-    @SuppressLint("InlinedApi")
     private void showControls() {
         /* Mark the views as animating */
         mSystemBarVisible = ViewState.IN_TRANSITION;
         mControlsVisible = ViewState.IN_TRANSITION;
 
         /* Show the system bar */
-        mContentView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            mContentView.setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
         mSystemBarVisible = ViewState.VISIBLE;
 
         /* Schedule a runnable to display UI elements after a delay */
@@ -800,7 +805,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
 
     /**
      * If the flash is on, turn it off, and vice versa. Front facing cameras without hardware
-     * flash will briefly display a max brighess, pure white screen
+     * flash will briefly display a max brightness, pure white screen
      *
      * @param item The menu item to change the icon in order to reflect the current state
      */
@@ -1005,7 +1010,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
      * @param source A string of HTML
      * @return a formatted Spanned which JellyBean is happy with
      */
-    public static Spanned formatHtmlString(String source) {
+    private static Spanned formatHtmlString(String source) {
         /* Make sure we're not formatting a null string */
         if (source == null) {
             return new SpannedString("");

@@ -37,7 +37,7 @@ public class AudioCapturer implements Runnable {
      *
      * @param audioReceiver An iAudioReceiver which will receive samples
      */
-    AudioCapturer(IAudioReceiver audioReceiver) {
+    private AudioCapturer(IAudioReceiver audioReceiver) {
         this.iAudioReceiver = audioReceiver;
     }
 

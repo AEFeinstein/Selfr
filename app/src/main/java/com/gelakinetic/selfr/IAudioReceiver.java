@@ -19,7 +19,7 @@
 
 package com.gelakinetic.selfr;
 
-public interface IAudioReceiver {
+interface IAudioReceiver {
     /**
      * Called when there is a buffer of audio to process
      *

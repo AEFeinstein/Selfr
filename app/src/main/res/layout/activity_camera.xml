@@ -81,6 +81,6 @@
         android:textAllCaps="true"
         android:textColor="@android:color/white"
         android:textSize="72sp"
-
-        android:visibility="gone" />
+        android:visibility="gone"
+        tools:ignore="UnusedAttribute" />
 </RelativeLayout>
