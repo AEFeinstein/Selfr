@@ -26,6 +26,10 @@
     <string name="camera_switch">Camera Switch</string>
     <string name="permission_failure">Can\'t take selfies without permission!</string>
     <string name="no_stick_warning">Please Attach Selfie Stick</string>
-    <string name="about_message">GPLv3 Licensed, available on github, yada yada</string>
+    <string name="about_message">
+        Source code available on &lt;a href="https://github.com/AEFeinstein/Selfr"&gt;GitHub&lt;/a&gt;.&lt;br&gt;&lt;br&gt;
+        Program licenced under the &lt;a href="http://www.gnu.org/licenses/gpl.html"&gt;GNU General Public License v3+&lt;/a&gt;.&lt;br&gt;&lt;br&gt;
+        Media licenced under the &lt;a href="http://creativecommons.org/licenses/by-sa/3.0/"&gt;Creative Commons Attribution-ShareAlike 3.0 Unported License&lt;/a&gt;.&lt;br&gt;&lt;br&gt;
+    </string>
     <string name="stick_error">ERROR: Try Reconnecting Stick</string>
 </resources>

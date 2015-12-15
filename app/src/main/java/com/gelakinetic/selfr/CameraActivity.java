@@ -21,12 +21,15 @@ package com.gelakinetic.selfr;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Dialog;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -37,6 +40,10 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.Html;
+import android.text.Spanned;
+import android.text.SpannedString;
+import android.text.method.LinkMovementMethod;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -57,9 +64,13 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 @SuppressWarnings("deprecation")
 public class CameraActivity extends AppCompatActivity implements IAudioReceiver {
+
+    private static final int DIALOG_ABOUT = 1;
 
     /* Enums */
     public enum ViewState {
@@ -386,17 +397,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         mToolbar.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // TODO fill this with useful information
-                AlertDialog.Builder builder = new AlertDialog.Builder(CameraActivity.this);
-                String title;
-                try {
-                    title = getString(R.string.app_name) + " " +
-                            getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                } catch (PackageManager.NameNotFoundException e) {
-                    title = getString(R.string.app_name);
-                }
-                builder.setMessage(R.string.about_message).setTitle(title);
-                builder.create().show();
+                showDialog(DIALOG_ABOUT);
             }
         });
 
@@ -545,6 +546,74 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
             mOrientationEventListener = null;
+        }
+    }
+
+    /**
+     * Build a dialog, currently only the about dialog
+     *
+     * @param id An ID corresponding to the dialog to be shown
+     * @return A Dialog to be displayed by the system
+     */
+    @Override
+    protected Dialog onCreateDialog(int id) {
+        switch (id) {
+            case DIALOG_ABOUT: {
+                /* Make a new builder */
+                AlertDialog.Builder builder = new AlertDialog.Builder(CameraActivity.this);
+
+                /* Inflate the dialog view */
+                View dialogView = View.inflate(CameraActivity.this, R.layout.about_dialog, null);
+
+                /* Set the title */
+                String title;
+                try {
+                    title = getString(R.string.app_name) + " " +
+                            getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                } catch (PackageManager.NameNotFoundException e) {
+                    title = getString(R.string.app_name);
+                }
+                builder.setTitle(title);
+
+                /* Set the text, with links enabled */
+                TextView dialogText = (TextView) dialogView.findViewById(R.id.about_dialog_text);
+                String aboutText = getString(R.string.about_message);
+
+                /* Add the build date if possible */
+                String buildDate = getBuildDate();
+                if (buildDate != null) {
+                    aboutText += buildDate + "<br>";
+                }
+
+                dialogText.setText(formatHtmlString(aboutText));
+                dialogText.setMovementMethod(LinkMovementMethod.getInstance());
+                builder.setView(dialogView);
+
+                /* Show the dialog */
+                return builder.create();
+            }
+            default: {
+                return super.onCreateDialog(id);
+            }
+        }
+    }
+
+    /**
+     * Helper function to return the build date of this APK
+     *
+     * @return A build date for this APK, or null if it could not be determined
+     */
+    private String getBuildDate() {
+        try {
+            ApplicationInfo ai = getPackageManager().getApplicationInfo(getPackageName(), 0);
+            ZipFile zf = new ZipFile(ai.sourceDir);
+            ZipEntry ze = zf.getEntry("classes.dex");
+            long time = ze.getTime();
+            String s = SimpleDateFormat.getInstance().format(new java.util.Date(time));
+            zf.close();
+            return s;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -883,7 +952,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
 
         /* Check to see if the average of the envelope crosses a threshold */
         boolean buttonPressed = false;
-        if(EnvelopeDetector.average(outputs) > 1000.0f) {
+        if (EnvelopeDetector.average(outputs) > 1000.0f) {
             buttonPressed = true;
         }
 
@@ -918,12 +987,32 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     public void setSelfieStickConnected(boolean selfieStickConnected) {
         if (selfieStickConnected) {
             mNoStickWarningView.setVisibility(View.GONE);
-            if(!mAudioCapturer.start()) {
+            if (!mAudioCapturer.start()) {
                 Toast.makeText(this, getString(R.string.stick_error), Toast.LENGTH_LONG).show();
             }
         } else {
             mNoStickWarningView.setVisibility(View.VISIBLE);
             mAudioCapturer.stop();
         }
+    }
+
+    /**
+     * Jellybean had a weird bug, and this fixes it. Silly google!
+     * https://code.google.com/p/android/issues/detail?id=35466#c2
+     * <p/>
+     * Process HTML tags within a String before displaying (i.e. <br> becomes \n)
+     *
+     * @param source A string of HTML
+     * @return a formatted Spanned which JellyBean is happy with
+     */
+    public static Spanned formatHtmlString(String source) {
+        /* Make sure we're not formatting a null string */
+        if (source == null) {
+            return new SpannedString("");
+        }
+        if (Build.VERSION.SDK_INT == 16) {
+            source = source.replace("<", " <").replace(">", " >").replace("  ", " ");
+        }
+        return Html.fromHtml(source);
     }
 }
