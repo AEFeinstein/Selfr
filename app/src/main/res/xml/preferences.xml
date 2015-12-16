@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory
+        android:title="@string/preferences_title">
+
+        <CheckBoxPreference
+            android:key="@string/display_value_key"
+            android:title="@string/display_value_title"
+            android:summary="@string/display_value_summary"
+            android:defaultValue="false"/>
+
+        <EditTextPreference
+            android:key="@string/threshold_key"
+            android:title="@string/threshold_title"
+            android:summary="@string/threshold_summary"
+            android:defaultValue="@string/default_threshold"
+            android:inputType="number"
+            android:numeric="integer"/>
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

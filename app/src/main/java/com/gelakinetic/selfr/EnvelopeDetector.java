@@ -42,7 +42,7 @@ class EnvelopeDetector {
         outputs[0] = mLastOutput;
 
         /* For each sample */
-        for(i = 0; i < samples.length; i++) {
+        for (i = 0; i < samples.length; i++) {
             /* Square it, multiply by ALPHA, and sum it with the prior output
              * multiplied by (1 - ALPHA)
              */

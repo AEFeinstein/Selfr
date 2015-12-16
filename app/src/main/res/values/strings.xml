@@ -32,4 +32,13 @@
         Media licenced under the &lt;a href="http://creativecommons.org/licenses/by-sa/3.0/"&gt;Creative Commons Attribution-ShareAlike 3.0 Unported License&lt;/a&gt;.&lt;br&gt;&lt;br&gt;
     </string>
     <string name="stick_error">ERROR: Try Reconnecting Stick</string>
+    <string name="display_value_key">display_value</string>
+    <string name="display_value_title">Display Button Value</string>
+    <string name="display_value_summary">Useful for calibrating, enabling this displays the analog button value in real time.</string>
+    <string name="threshold_key">threshold_key</string>
+    <string name="threshold_title">Button Detection Level</string>
+    <string name="threshold_summary">When the analog button value is higher than this value, a picture will be taken.</string>
+    <string name="preferences_title">Preferences</string>
+    <string name="default_threshold">1000</string>
+    <string name="about">About</string>
 </resources>

@@ -23,6 +23,7 @@ import android.Manifest;
 import android.app.Dialog;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
@@ -32,6 +33,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
@@ -88,6 +90,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     private TextView mNoStickWarningView;
     private View mControlsView;
     private CameraPreview mCameraPreview;
+    private TextView mDebugTextView;
 
     /* State objects */
     private ViewState mSystemBarVisible;
@@ -105,6 +108,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
     private Camera mCamera;
     private OrientationEventListener mOrientationEventListener;
     private EnvelopeDetector mEnvelopeDetector;
+    private float mButtonThreshold;
 
     /* Handler and Runnables */
     private Handler mHandler;
@@ -380,6 +384,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         mContentView = (FrameLayout) findViewById(R.id.fullscreen_content);
         mFlashView = (FrameLayout) findViewById(R.id.flash_view);
         mNoStickWarningView = (TextView) findViewById(R.id.no_stick_text);
+        mDebugTextView = (TextView) findViewById(R.id.debug_text_view);
 
         mControlsVisible = ViewState.VISIBLE;
         mSystemBarVisible = ViewState.VISIBLE;
@@ -397,12 +402,6 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         /* Set up the Toolbar */
         Toolbar mToolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(mToolbar);
-        mToolbar.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showDialog(DIALOG_ABOUT);
-            }
-        });
 
         mEnvelopeDetector = new EnvelopeDetector();
     }
@@ -444,6 +443,18 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
                     PERMISSION_REQUEST_CODE);
         } else {
             /* Otherwise, fire everything up */
+
+            /* Set things based on preferences */
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            if (prefs.getBoolean(getString(R.string.display_value_key), false)) {
+                mDebugTextView.setVisibility(View.VISIBLE);
+            } else {
+                mDebugTextView.setVisibility(View.GONE);
+            }
+
+            mButtonThreshold = Float.parseFloat(prefs.getString(getString(R.string.threshold_key),
+                    getString(R.string.default_threshold)));
+
             /* Set up the audio capture */
             mAudioCapturer = AudioCapturer.getInstance(this);
 
@@ -743,7 +754,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
             mContentView.setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+                            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
         mSystemBarVisible = ViewState.VISIBLE;
 
@@ -794,6 +805,17 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
             case R.id.flash_setting: {
                 /* Switch the flash between on and off */
                 switchFlash(item);
+                return true;
+            }
+            case R.id.preferences: {
+                /* Launch the preference activity */
+                Intent intent = new Intent(this, PrefActivity.class);
+                startActivity(intent);
+                return true;
+            }
+            case R.id.about: {
+                /* Show the about dialog */
+                showDialog(DIALOG_ABOUT);
                 return true;
             }
             default: {
@@ -949,6 +971,20 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
         /* Keep the envelope detector running, no matter what */
         float outputs[] = new float[tempBuf.length + 1];
         mEnvelopeDetector.findEnvelope(tempBuf, outputs);
+        final float average = EnvelopeDetector.average(outputs);
+
+        /* Update the debug text view */
+        if (mDebugTextView.getVisibility() == View.VISIBLE) {
+            runOnUiThread(new Runnable() {
+                /**
+                 * Update the debug text view on the UI thread, not the audio thread
+                 */
+                @Override
+                public void run() {
+                    mDebugTextView.setText(String.format(Locale.getDefault(), "%d", (int) average));
+                }
+            });
+        }
 
         /* If the app just took a picture, and is debouncing, don't look for button presses */
         if (mDebounce) {
@@ -957,7 +993,7 @@ public class CameraActivity extends AppCompatActivity implements IAudioReceiver 
 
         /* Check to see if the average of the envelope crosses a threshold */
         boolean buttonPressed = false;
-        if (EnvelopeDetector.average(outputs) > 1000.0f) {
+        if (average > mButtonThreshold) {
             buttonPressed = true;
         }
 
